@@ -429,7 +429,8 @@ def simple_login():
 if not simple_login():
     st.stop()
 
-DB_FILE = "data/cordyceps.json"
+DB_FILE = "Data/Cordyceps.json"
+
 
 
 # --- טעינה ושמירה ---
