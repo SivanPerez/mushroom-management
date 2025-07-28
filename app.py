@@ -402,7 +402,12 @@ def simple_login():
                     "ido": "mycospring",
                     "rea": "mycospring",
                     "pavel": "mycospring",
-                    "niv": "mycospring"
+                    "niv": "mycospring",
+                    "tania": "mycospring",
+                    "asia": "mycospring",
+                    "ron": "mycospring",
+                    "matan": "mycospring",
+                    "eyal": "mycospring"
                 }
 
                 if username in valid_users and password == valid_users[username]:
