@@ -6,7 +6,49 @@ import plotly.express as px
 from datetime import datetime
 import plotly.graph_objects as go
 import numpy as np
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from datetime import datetime, timedelta
+import os
 
+def create_incubation_label(culture, filename):
+    """יוצר PDF למדבקה של תרבית אינקובציה"""
+    c = canvas.Canvas(filename, pagesize=A4)
+
+    # מיקום וגודל המדבקה (100x60 מ"מ לדוגמה)
+    x, y, w, h = 20*mm, 250*mm, 100*mm, 60*mm
+
+    # מסגרת
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1)
+    c.rect(x, y, w, h)
+
+    # חישוב תאריך אנדרלייט (שבוע אחרי אינקובציה)
+    incubation_date = culture.get("תאריך אינקולציה", "")
+    try:
+        underlight_date = (datetime.strptime(incubation_date, "%Y-%m-%d") + timedelta(days=7)).strftime("%Y-%m-%d")
+    except Exception:
+        underlight_date = ""
+
+    # כותרת (ID)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x + 10*mm, y + h - 12*mm, f"ID: {culture.get('id', '')}")
+
+    # פרטים
+    c.setFont("Helvetica", 12)
+    c.drawString(x + 10*mm, y + h - 22*mm, f"תאריך אינקולציה: {incubation_date}")
+    c.drawString(x + 10*mm, y + h - 30*mm, f"תאריך אנדרלייט צפוי: {underlight_date}")
+    c.drawString(x + 10*mm, y + h - 38*mm, f"תרבית: {culture.get('תרבית', '')}")
+    c.drawString(x + 10*mm, y + h - 46*mm, f"מצע: {culture.get('מצע', '')}")
+    c.drawString(x + 10*mm, y + h - 54*mm, f"חיטוי: {culture.get('חיטוי', '')}")
+    c.drawString(x + 60*mm, y + h - 22*mm, f"בקבוקים: {culture.get('מספר בקבוקים', '')}")
+    c.drawString(x + 60*mm, y + h - 30*mm, f"קופסאות: {culture.get('מספר קופסאות', '')}")
+    c.drawString(x + 60*mm, y + h - 38*mm, f"סוג קופסא: {culture.get('סוג קופסא', '')}")
+
+    c.showPage()
+    c.save()
 
 def create_dashboard(data):
 
@@ -554,71 +596,78 @@ with tabs[2]:
                 st.rerun()
     else:
         st.info("אין צלחות זמינות ליצירת בקבוקים.")
-
-# --- טאב 3: אינקובציה ---
 # --- טאב 3: אינקובציה ---
 with tabs[3]:
     st.header("📦 אינקובציה")
-    bottles = [c for c in data if c.get("שלב") == "בקבוקי תרבית נוזלית"]
+
+
+    def incubation_tab(data):
+        st.header("אזור אינקובציה")
+        ids = [c["id"] for c in data]
+        selected_id = st.selectbox("בחר ID להפקת מדבקה", ids)
+
+        culture = next((c for c in data if c["id"] == selected_id), None)
+
+        if culture:
+            if st.button("צור מדבקה (PDF)"):
+                filename = f"label_{selected_id}.pdf"
+                create_incubation_label(culture, filename)
+
+                with open(filename, "rb") as f:
+                    st.download_button(
+                        label="הורד את המדבקה",
+                        data=f,
+                        file_name=filename,
+                        mime="application/pdf"
+                    )
+                os.remove(filename)  # לא להשאיר קבצים על השרת
+    # סינון תרביות עם בקבוקים זמינים בלבד
+    bottles = [c for c in data if c.get("שלב") == "בקבוקי תרבית נוזלית" and c.get("מספר בקבוקים", 0) > 0]
+
     if bottles:
         st.subheader("ביצוע אינקובציה")
 
-        # --- שדות בחירה מחוץ לטופס (ערכים גלובליים) ---
-        substrate_value = st.selectbox(
-            "סוג מצע",
-            ["כוסמין אורגני + נוזל חדש", "רותה + נוזל חדש", "אחר"]
-        )
+        # בחירות כלליות
+        substrate_value = st.selectbox("סוג מצע", ["כוסמין אורגני + נוזל חדש", "רותה + נוזל חדש", "אחר"])
         if substrate_value == "אחר":
             substrate_value = st.text_input("ציין סוג מצע אחר")
 
-        sterilization_value = st.selectbox(
-            "שיטת חיטוי",
-            ["קיטור 25", "קיטור 30", "קיטור 35", "אחר"]
-        )
+        sterilization_value = st.selectbox("שיטת חיטוי", ["קיטור 25", "קיטור 30", "קיטור 35", "אחר"])
         if sterilization_value == "אחר":
             sterilization_value = st.text_input("פרט שיטת חיטוי")
 
-        box_type_value = st.selectbox(
-            "סוג קופסא",
-            ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר", "אחר"]
-        )
+        box_type_value = st.selectbox("סוג קופסא", ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר", "אחר"])
         if box_type_value == "אחר":
             box_type_value = st.text_input("פרט סוג קופסא")
 
-        # --- טופס להעברה לאינקובציה ---
+        # רשימת התרביות לבחירה
+        all_data = load_data()
+        fresh_bottles = [c for c in all_data if c.get("שלב") == "בקבוקי תרבית נוזלית" and c.get("מספר בקבוקים", 0) > 0]
         options = {
             f"#{c['id']} {c['תרבית']} ({c.get('תאריך בקבוקים', '-')}) - {c.get('מספר בקבוקים', 0)} בקבוקים": c["id"]
-            for c in bottles
+            for c in fresh_bottles
         }
 
+        # שדה בחירת התרבית
+        selected = st.selectbox("בחר תרבית מתאימה", list(options.keys()))
+
+        # שמירת הבחירה ב-Session כדי לרנדר מחדש
+        if "last_selected" not in st.session_state or st.session_state.last_selected != selected:
+            st.session_state.last_selected = selected
+            st.rerun()
+
+        bottle_id = options[selected]
+        bottle = next((p for p in all_data if p["id"] == bottle_id), {})
+        total_bottles = bottle.get("מספר בקבוקים", 0)
+
+        # מציג כמה בקבוקים יש במלאי
+        st.markdown(f"**נשארו במלאי: {total_bottles} בקבוקים**")
+
+        # טופס העברה לאינקובציה
         with st.form("add_inoc", clear_on_submit=True):
-            # תמיד לטעון מחדש את הנתונים, לא להסתמך על bottles הקודם
-            all_data = load_data()
-            fresh_bottles = [c for c in all_data if c.get("שלב") == "בקבוקי תרבית נוזלית"]
-
-            options = {
-                f"#{c['id']} {c['תרבית']} ({c.get('תאריך בקבוקים', '-')}) - {c.get('מספר בקבוקים', 0)} בקבוקים": c["id"]
-                for c in fresh_bottles
-            }
-
-            selected = st.selectbox("בחר תרבית מתאימה", list(options.keys()))
-            if "last_selected" not in st.session_state or st.session_state.last_selected != selected:
-                st.session_state.last_selected = selected
-                st.rerun()
-
-            # לשמור את bottle_id כדי להשתמש בהמשך
-            bottle_id = options[selected]
-
-
-            # קבלת התרבית שנבחרה בזמן אמת
-            def get_selected_bottle_data(selected_option, data):
-                return next((p for p in data if p["id"] == bottle_id), {})
-
-
-            bottle = get_selected_bottle_data(selected, data)
-            total_bottles = bottle.get("מספר בקבוקים", 0)
-
             box_date = st.date_input("תאריך אינקובציה", value=date.today())
+
+            # כאן ה-Number Input מתעדכן לפי הבחירה הנוכחית
             inoc_bottles = st.number_input(
                 "כמה בקבוקים להעביר לאינקובציה",
                 min_value=1,
@@ -631,37 +680,41 @@ with tabs[3]:
                 if inoc_bottles > total_bottles:
                     st.error("אין מספיק בקבוקים!")
                 else:
-                    # עדכון JSON ישירות בגרסה העדכנית
-                    bottle["מספר בקבוקים"] = total_bottles - inoc_bottles
+                    # עדכון מלאי בקבוקים
+                    for c in all_data:
+                        if c["id"] == bottle_id:
+                            c["מספר בקבוקים"] = total_bottles - inoc_bottles
 
+                    # הסרה אם נגמרו בקבוקים
+                    all_data = [c for c in all_data if c.get("מספר בקבוקים", 0) > 0 or c["id"] != bottle_id]
+
+                    # הוספת תרבית חדשה לאינקובציה
                     new_culture = {
                         "id": get_next_id(all_data),
                         "שלב": "אינקובציה",
                         "תרבית": bottle["תרבית"],
                         "תאריך אינקובציה": str(box_date),
-                        "מצע": substrate_value if substrate_value else "לא צוין",
-                        "חיטוי": sterilization_value if sterilization_value else "לא צוין",
-                        "סוג קופסא": box_type_value if box_type_value else "לא צוין",
+                        "מצע": substrate_value or "לא צוין",
+                        "חיטוי": sterilization_value or "לא צוין",
+                        "סוג קופסא": box_type_value or "לא צוין",
                         "מספר בקבוקים": inoc_bottles,
                         "מספר קופסאות": box_count
                     }
                     all_data.append(new_culture)
 
-                    if bottle["מספר בקבוקים"] == 0:
-                        all_data = [c for c in all_data if c["id"] != bottle_id]
-
                     save_data(all_data)
-                    st.success("בוצעה אינקובציה לחלק/כל הבקבוקים!")
+                    st.success(f"אינקובציה בוצעה! {inoc_bottles} בקבוקים → {box_count} קופסאות")
                     st.rerun()
 
     else:
         st.info("אין בקבוקים זמינים לאינקובציה.")
 
-    # הצגת תרביות בשלב אינקובציה
+    # הצגת תרביות שכבר בשלב אינקובציה
     incubations = [c for c in data if c.get("שלב") == "אינקובציה"]
     if incubations:
         st.subheader("תרביות בשלב אינקובציה")
         st.dataframe(pd.DataFrame(incubations))
+
 
 # --- טאב אנדרלייט ---
 with tabs[4]:
