@@ -13,7 +13,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
 
-DB_FILE = "cordyceps.json"
+DB_FILE = "Data/Cordyceps.json"
 BACKUP_DIR = "backups"  # כל הגיבויים יישמרו פה
 
 def push_to_git():
@@ -26,7 +26,7 @@ def push_to_git():
     try:
         subprocess.run(["git", "config", "user.email", "bot@streamlit.com"], check=True)
         subprocess.run(["git", "config", "user.name", "Streamlit Bot"], check=True)
-        subprocess.run(["git", "add", "cordyceps.json"], check=True)
+        subprocess.run(["git", "add", "DB_FILE"], check=True)
         subprocess.run(["git", "commit", "-m", "Auto-update data"], check=True)
         subprocess.run([
             "git", "push",
@@ -542,10 +542,6 @@ def simple_login():
 if not simple_login():
     st.stop()
 
-DB_FILE = "Data/Cordyceps.json"
-
-
-
 # --- טעינה ושמירה ---
 def load_data():
     try:
@@ -622,8 +618,7 @@ stages = [
     "אנדרלייט",
     "מיון",
     "קטיף ראשוני",
-    "קטיף אחרון",
-    "גיבויים"
+    "קטיף אחרון"
 ]
 
 tabs = st.tabs(["דשבורד", *stages])
@@ -990,6 +985,3 @@ with tabs[8]:
     else:
         st.info("אין תרביות בשלב קטיף אחרון.")
 
-#גיבויים
-with tabs[9]:
-    show_backups_page()
