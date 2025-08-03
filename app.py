@@ -51,8 +51,7 @@ def backup_local():
         print(f"גיבוי יומי נוצר: {backup_path}")
 
 # רישום פונט Arial (כדי לתמוך בעברית)
-pdfmetrics.registerFont(TTFont('Arial', 'C:/Windows/Fonts/arial.ttf'))
-
+pdfmetrics.registerFont(TTFont('NotoSansHebrew', 'Noto_Sans_Hebrew/static/NotoSansHebrew-Regular.ttf'))
 def create_labels_pdf(selected_cultures, filename):
     """יוצר PDF עם מדבקה נפרדת לכל תרבית שנבחרה (עמוד 4x4 אינץ' לכל אחת)."""
     page_size = (4 * 25.4 * mm, 4 * 25.4 * mm)
