@@ -1,12 +1,116 @@
+import os
+from datetime import datetime, timedelta, date
 import streamlit as st
 import json
-from datetime import date
 import pandas as pd
-import plotly.express as px
-from datetime import datetime
 import plotly.graph_objects as go
-import numpy as np
+import shutil
+import subprocess
 
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import mm
+
+DB_FILE = "cordyceps.json"
+BACKUP_DIR = "backups"  # כל הגיבויים יישמרו פה
+
+def push_to_git():
+    token = os.getenv("GITHUB_TOKEN")
+    repo = os.getenv("GITHUB_REPO")
+    if not token or not repo:
+        print("GitHub token or repo not configured.")
+        return
+
+    try:
+        subprocess.run(["git", "config", "user.email", "bot@streamlit.com"], check=True)
+        subprocess.run(["git", "config", "user.name", "Streamlit Bot"], check=True)
+        subprocess.run(["git", "add", "cordyceps.json"], check=True)
+        subprocess.run(["git", "commit", "-m", "Auto-update data"], check=True)
+        subprocess.run([
+            "git", "push",
+            f"https://{token}@github.com/{repo}.git"
+        ], check=True)
+        print("הנתונים נשמרו גם ב-GitHub.")
+    except Exception as e:
+        print("שגיאה בשמירה ל-GitHub:", e)
+
+
+def backup_local():
+    """יוצר עותק יומי של קובץ הנתונים."""
+    if not os.path.exists(BACKUP_DIR):
+        os.makedirs(BACKUP_DIR)
+
+    today = date.today().isoformat()
+    backup_name = f"cordyceps_{today}.json"
+    backup_path = os.path.join(BACKUP_DIR, backup_name)
+
+    if os.path.exists(DB_FILE) and not os.path.exists(backup_path):
+        shutil.copy(DB_FILE, backup_path)
+        print(f"גיבוי יומי נוצר: {backup_path}")
+
+# רישום פונט Arial (כדי לתמוך בעברית)
+pdfmetrics.registerFont(TTFont('Arial', 'C:/Windows/Fonts/arial.ttf'))
+
+def create_labels_pdf(selected_cultures, filename):
+    """יוצר PDF עם מדבקה נפרדת לכל תרבית שנבחרה (עמוד 4x4 אינץ' לכל אחת)."""
+    page_size = (4 * 25.4 * mm, 4 * 25.4 * mm)
+    c = canvas.Canvas(filename, pagesize=page_size)
+
+    for culture in selected_cultures:
+        # כל מדבקה היא עמוד נפרד
+        create_single_label_page(c, culture, page_size)
+        c.showPage()  # מסיים עמוד לפני הבא
+
+    c.save()
+
+def create_single_label_page(c, culture, page_size):
+    """מייצר עמוד בודד של מדבקה (בשימוש בפונקציה הראשית)."""
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(2)
+    c.rect(0, 0, page_size[0], page_size[1])
+
+    incubation_date = culture.get("תאריך אינקובציה", "")
+    try:
+        underlight_date = (datetime.strptime(incubation_date, "%Y-%m-%d") + timedelta(days=7)).strftime("%Y-%m-%d")
+    except:
+        underlight_date = ""
+
+    rows = [
+        ("ID", str(culture.get("id", "")), False, False),
+        ("תאריך אינקובציה", incubation_date, True, False),
+        ("תאריך אנדרלייט צפוי", underlight_date, True, False),
+        ("תרבית", culture.get("תרבית", ""), True, True),
+        ("מצע", culture.get("מצע", ""), True, True),
+        ("משך קיטור בשעות", culture.get("משך קיטור בשעות", ""), True, False),
+        ("בקבוקים", str(culture.get("מספר בקבוקים", "")), True, False),
+        ("קופסאות", str(culture.get("מספר קופסאות", "")), True, False),
+    ]
+
+    c.setFont("Arial", 24)
+    c.drawCentredString(page_size[0]/2, page_size[1]-40, f"ID: {rows[0][1]}")
+
+    c.setFont("Arial", 18)
+    y_text = page_size[1] - 90
+    for title, value, flip_title, flip_value in rows[1:]:
+        title_fixed = reverse_hebrew_text(title, flip_title)
+        value_fixed = reverse_hebrew_text(value, flip_value)
+        line = f"{value_fixed}: {title_fixed}"
+        c.drawCentredString(page_size[0]/2, y_text, line)
+        y_text -= 30
+
+def reverse_hebrew_text(text, flip=True):
+    """
+    הופך את סדר האותיות אם יש טקסט עברי, אבל לא מפרק למילים.
+    אם זה מספר או תאריך – משאיר כמו שהוא.
+    """
+    if not flip:
+        return text
+    # אם אין בכלל אותיות עבריות – לא הופכים
+    if not any('\u0590' <= ch <= '\u05EA' for ch in text):
+        return text
+    return text[::-1]  # הופך את כל הטקסט (רק אם יש עברית)
 
 def create_dashboard(data):
 
@@ -36,7 +140,7 @@ def create_dashboard(data):
                 {"חדר": c.get("מיקום אנדרלייט", "לא צוין"), "קופסאות": max(boxes - damaged - early, 0)})
 
     # חישוב סטטיסטיקות לחדרים
-    room_caps = {"חדר 4": 6000, "חדר 5": 2700, "חדר 7": 2700}
+    room_caps = {"חדר 4": 6900, "חדר 5": 2700, "חדר 7": 2700}
     room_stats = {r: 0 for r in room_caps}
 
     for item in underlay_data:
@@ -70,8 +174,6 @@ def create_dashboard(data):
         <p style="margin-top: 10px;">רמת תפוסה: {status_text} ({occupancy_pct:.1f}%)</p>
     </div>
     """, unsafe_allow_html=True)
-
-    import plotly.graph_objects as go
 
     def draw_room_donut(room_name, occupancy_pct, color, total, capacity):
         # חישוב הערכים לתצוגה ולטול־טיפ
@@ -450,10 +552,44 @@ def load_data():
 def save_data(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-
+    backup_local()  # יצירת גיבוי יומי אחרי כל שמירה
+    push_to_git()  # שמירה אוטומטית ב-GitHub
 
 def get_next_id(data):
     return max([c['id'] for c in data], default=0) + 1
+def show_backups_page():
+    st.header("ניהול גיבויים יומיים")
+    if not os.path.exists(BACKUP_DIR):
+        st.write("עדיין לא נוצרו גיבויים.")
+        return
+
+    backups = sorted(os.listdir(BACKUP_DIR))
+    if not backups:
+        st.write("אין גיבויים זמינים.")
+        return
+
+    for bfile in backups:
+        bpath = os.path.join(BACKUP_DIR, bfile)
+        with open(bpath, "rb") as f:
+            st.download_button(
+                label=f"הורד {bfile}",
+                data=f,
+                file_name=bfile,
+                mime="application/json"
+            )
+
+    # מחיקת גיבויים ישנים (אופציונלי)
+    if st.button("מחק גיבויים ישנים (מעל 30 יום)"):
+        cutoff = datetime.datetime.now() - datetime.timedelta(days=30)
+        for bfile in backups:
+            date_str = bfile.replace("cordyceps_", "").replace(".json", "")
+            try:
+                file_date = datetime.datetime.fromisoformat(date_str)
+                if file_date < cutoff:
+                    os.remove(os.path.join(BACKUP_DIR, bfile))
+            except ValueError:
+                pass
+        st.success("גיבויים ישנים נמחקו.")
 
 
 data = load_data()
@@ -476,10 +612,12 @@ stages = [
     "צלחות פטרי",
     "תרבית נוזלית",
     "אינקובציה",
+    "מדבקות",
     "אנדרלייט",
     "מיון",
     "קטיף ראשוני",
-    "קטיף אחרון"
+    "קטיף אחרון",
+    "גיבויים"
 ]
 
 tabs = st.tabs(["דשבורד", *stages])
@@ -520,8 +658,6 @@ with tabs[2]:
         st.subheader("בקבוקים במלאי")
         # יוצרים DataFrame מהנתונים
         df1_disp = pd.DataFrame(liquid_stage)
-        # מסירים עמודות מיותרות אם קיימות
-        df1_disp = df1_disp.drop(columns=["משקל קטיף כולל", "ממוצע משקל לקופסא"], errors="ignore")
         # משנים שם עמודה
         df1_disp = df1_disp.rename(columns={"מספר קופסאות": "מספר בקבוקים"})
         st.dataframe(df1_disp)
@@ -556,69 +692,56 @@ with tabs[2]:
         st.info("אין צלחות זמינות ליצירת בקבוקים.")
 
 # --- טאב 3: אינקובציה ---
-# --- טאב 3: אינקובציה ---
 with tabs[3]:
     st.header("📦 אינקובציה")
-    bottles = [c for c in data if c.get("שלב") == "בקבוקי תרבית נוזלית"]
+
+        # סינון תרביות עם בקבוקים זמינים בלבד
+    bottles = [c for c in data if c.get("שלב") == "בקבוקי תרבית נוזלית" and c.get("מספר בקבוקים", 0) > 0]
+
     if bottles:
         st.subheader("ביצוע אינקובציה")
 
-        # --- שדות בחירה מחוץ לטופס (ערכים גלובליים) ---
-        substrate_value = st.selectbox(
-            "סוג מצע",
-            ["כוסמין אורגני + נוזל חדש", "רותה + נוזל חדש", "אחר"]
-        )
+        # בחירות כלליות
+        substrate_value = st.selectbox("סוג מצע", ["כוסמין אורגני + נוזל חדש", "רותה + נוזל חדש", "אחר"])
         if substrate_value == "אחר":
             substrate_value = st.text_input("ציין סוג מצע אחר")
 
-        sterilization_value = st.selectbox(
-            "שיטת חיטוי",
-            ["קיטור 25", "קיטור 30", "קיטור 35", "אחר"]
-        )
+        sterilization_value = st.selectbox("משך קיטור בשעות", ["25", "30", "35", "אחר"])
         if sterilization_value == "אחר":
             sterilization_value = st.text_input("פרט שיטת חיטוי")
 
-        box_type_value = st.selectbox(
-            "סוג קופסא",
-            ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר", "אחר"]
-        )
+        box_type_value = st.selectbox("סוג קופסא", ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר", "אחר"])
         if box_type_value == "אחר":
             box_type_value = st.text_input("פרט סוג קופסא")
 
-        # --- טופס להעברה לאינקובציה ---
+        # רשימת התרביות לבחירה
+        all_data = load_data()
+        fresh_bottles = [c for c in all_data if c.get("שלב") == "בקבוקי תרבית נוזלית" and c.get("מספר בקבוקים", 0) > 0]
         options = {
             f"#{c['id']} {c['תרבית']} ({c.get('תאריך בקבוקים', '-')}) - {c.get('מספר בקבוקים', 0)} בקבוקים": c["id"]
-            for c in bottles
+            for c in fresh_bottles
         }
 
+        # שדה בחירת התרבית
+        selected = st.selectbox("בחר תרבית מתאימה", list(options.keys()))
+
+        # שמירת הבחירה ב-Session כדי לרנדר מחדש
+        if "last_selected" not in st.session_state or st.session_state.last_selected != selected:
+            st.session_state.last_selected = selected
+            st.rerun()
+
+        bottle_id = options[selected]
+        bottle = next((p for p in all_data if p["id"] == bottle_id), {})
+        total_bottles = bottle.get("מספר בקבוקים", 0)
+
+        # מציג כמה בקבוקים יש במלאי
+        st.markdown(f"**נשארו במלאי: {total_bottles} בקבוקים**")
+
+        # טופס העברה לאינקובציה
         with st.form("add_inoc", clear_on_submit=True):
-            # תמיד לטעון מחדש את הנתונים, לא להסתמך על bottles הקודם
-            all_data = load_data()
-            fresh_bottles = [c for c in all_data if c.get("שלב") == "בקבוקי תרבית נוזלית"]
-
-            options = {
-                f"#{c['id']} {c['תרבית']} ({c.get('תאריך בקבוקים', '-')}) - {c.get('מספר בקבוקים', 0)} בקבוקים": c["id"]
-                for c in fresh_bottles
-            }
-
-            selected = st.selectbox("בחר תרבית מתאימה", list(options.keys()))
-            if "last_selected" not in st.session_state or st.session_state.last_selected != selected:
-                st.session_state.last_selected = selected
-                st.rerun()
-
-            # לשמור את bottle_id כדי להשתמש בהמשך
-            bottle_id = options[selected]
-
-
-            # קבלת התרבית שנבחרה בזמן אמת
-            def get_selected_bottle_data(selected_option, data):
-                return next((p for p in data if p["id"] == bottle_id), {})
-
-
-            bottle = get_selected_bottle_data(selected, data)
-            total_bottles = bottle.get("מספר בקבוקים", 0)
-
             box_date = st.date_input("תאריך אינקובציה", value=date.today())
+
+            # כאן ה-Number Input מתעדכן לפי הבחירה הנוכחית
             inoc_bottles = st.number_input(
                 "כמה בקבוקים להעביר לאינקובציה",
                 min_value=1,
@@ -631,40 +754,77 @@ with tabs[3]:
                 if inoc_bottles > total_bottles:
                     st.error("אין מספיק בקבוקים!")
                 else:
-                    # עדכון JSON ישירות בגרסה העדכנית
-                    bottle["מספר בקבוקים"] = total_bottles - inoc_bottles
+                    # עדכון מלאי בקבוקים
+                    for c in all_data:
+                        if c["id"] == bottle_id:
+                            c["מספר בקבוקים"] = total_bottles - inoc_bottles
 
+                    # הסרה אם נגמרו בקבוקים
+                    all_data = [c for c in all_data if c.get("מספר בקבוקים", 0) > 0 or c["id"] != bottle_id]
+
+                    # הוספת תרבית חדשה לאינקובציה
                     new_culture = {
                         "id": get_next_id(all_data),
                         "שלב": "אינקובציה",
                         "תרבית": bottle["תרבית"],
                         "תאריך אינקובציה": str(box_date),
-                        "מצע": substrate_value if substrate_value else "לא צוין",
-                        "חיטוי": sterilization_value if sterilization_value else "לא צוין",
-                        "סוג קופסא": box_type_value if box_type_value else "לא צוין",
+                        "מצע": substrate_value or "לא צוין",
+                        "משך קיטור בשעות": sterilization_value or "לא צוין",
+                        "סוג קופסא": box_type_value or "לא צוין",
                         "מספר בקבוקים": inoc_bottles,
                         "מספר קופסאות": box_count
                     }
                     all_data.append(new_culture)
 
-                    if bottle["מספר בקבוקים"] == 0:
-                        all_data = [c for c in all_data if c["id"] != bottle_id]
-
                     save_data(all_data)
-                    st.success("בוצעה אינקובציה לחלק/כל הבקבוקים!")
+                    st.success(f"אינקובציה בוצעה! {inoc_bottles} בקבוקים → {box_count} קופסאות")
                     st.rerun()
 
     else:
         st.info("אין בקבוקים זמינים לאינקובציה.")
 
-    # הצגת תרביות בשלב אינקובציה
+    # הצגת תרביות שכבר בשלב אינקובציה
     incubations = [c for c in data if c.get("שלב") == "אינקובציה"]
     if incubations:
         st.subheader("תרביות בשלב אינקובציה")
         st.dataframe(pd.DataFrame(incubations))
 
-# --- טאב אנדרלייט ---
+# --- טאב מדבקות ---
 with tabs[4]:
+    st.header("🖨️ הדפסת מדבקות")
+
+    # רשימת כל התרביות עם אינקובציה
+    cultures_for_labels = [c for c in data if c.get("שלב") == "אינקובציה"]
+
+    if not cultures_for_labels:
+        st.info("אין תרביות בשלב אינקובציה ליצירת מדבקות.")
+    else:
+        # מאפשר לבחור כמה ID-ים
+        options = {f"#{c['id']} {c['תרבית']} ({c.get('תאריך אינקובציה', '-')})": c["id"] for c in cultures_for_labels}
+        selected_keys = st.multiselect("בחר תרביות להדפסה", list(options.keys()))
+
+        # מאתרים את האובייקטים שנבחרו
+        selected_cultures = [c for c in cultures_for_labels if c["id"] in [options[k] for k in selected_keys]]
+
+        if selected_cultures and st.button("צור מדבקות"):
+
+            today_str = datetime.today().strftime("%Y-%m-%d")
+            filename = f"{today_str}_Labels.pdf"
+
+            create_labels_pdf(selected_cultures, filename)
+
+            with open(filename, "rb") as f:
+                st.download_button(
+                    label="הורדה",
+                    data=f,
+                    file_name=filename,
+                    mime="application/pdf"
+                )
+            os.remove(filename)
+
+
+# --- טאב אנדרלייט ---
+with tabs[5]:
     st.header("🔄 אנדרלייט")
     prev_stage = "אינקובציה"
     ready_to_move = [c for c in data if c.get("שלב") == prev_stage]
@@ -695,7 +855,7 @@ with tabs[4]:
 
 
 # --- טאב מיון ---
-with tabs[5]:
+with tabs[6]:
     st.header("🔄 מיון")
     prev_stage = "אנדרלייט"
     ready_to_move = [c for c in data if c.get("שלב") == prev_stage]
@@ -732,7 +892,7 @@ with tabs[5]:
 
 
 # --- טאב קטיף ראשוני ---
-with tabs[6]:
+with tabs[7]:
     st.header("🔄 קטיף ראשוני")
     prev_stage = "מיון"
     ready_to_move = [c for c in data if c.get("שלב") == prev_stage]
@@ -767,7 +927,7 @@ with tabs[6]:
 
 
 # --- טאב קטיף אחרון ---
-with tabs[7]:
+with tabs[8]:
     st.header("🔄 קטיף אחרון")
     prev_stage = "קטיף ראשוני"
     ready_to_move = [c for c in data if c.get("שלב") == prev_stage]
@@ -823,3 +983,7 @@ with tabs[7]:
         st.dataframe(dfc)
     else:
         st.info("אין תרביות בשלב קטיף אחרון.")
+
+#גיבויים
+with tabs[9]:
+    show_backups_page()
