@@ -538,6 +538,7 @@ def simple_login():
         return True
 
 
+
 # בדיקת התחברות
 if not simple_login():
     st.stop()
