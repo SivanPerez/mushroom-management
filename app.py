@@ -971,6 +971,9 @@ with tabs[8]:
                     "סטטוס": "נקטף במלואו",
                     "תאריך קטיף אחרון": str(tdate),
                     "משקל קטיף אחרון (גרם)": weight,
+                    "סה\"כ קטיף (ק\"ג)": round((weight + culture.get("משקל קטיף ראשוני (גרם)", 0)) / 1000, 2),
+                    "ממוצע משקל לקופסא (גרם)": round(
+                        (weight + culture.get("משקל קטיף ראשוני (גרם)", 0)) / culture.get("מספר קופסאות", 1), 2)
                 })
                 data = load_data()
 
@@ -982,24 +985,49 @@ with tabs[8]:
     dfc = pd.DataFrame([c for c in data if c.get("שלב") == "קטיף אחרון"])
     if not dfc.empty:
         # חישובי משקל וממוצע כמו קודם
+        # המרה מספרית לשדות דרושים
         dfc["משקל קטיף אחרון (גרם)"] = pd.to_numeric(
             dfc.get("משקל קטיף אחרון (גרם)", pd.Series([0] * len(dfc))),
             errors="coerce"
         ).fillna(0)
+
         dfc["משקל קטיף ראשוני (גרם)"] = pd.to_numeric(
             dfc.get("משקל קטיף ראשוני (גרם)", pd.Series([0] * len(dfc))),
             errors="coerce"
         ).fillna(0)
+
         dfc["מספר קופסאות"] = pd.to_numeric(
             dfc.get("מספר קופסאות", pd.Series([0] * len(dfc))),
             errors="coerce"
         ).fillna(0)
 
+        dfc["מספר קופסאות לקטיף ראשוני"] = pd.to_numeric(
+            dfc.get("מספר קופסאות לקטיף ראשוני", pd.Series([0] * len(dfc))),
+            errors="coerce"
+        ).fillna(0)
+
+        dfc["מספר קופסאות פגומות"] = pd.to_numeric(
+            dfc.get("מספר קופסאות פגומות", pd.Series([0] * len(dfc))),
+            errors="coerce"
+        ).fillna(0)
+
+        # חישובים
         total_g = dfc["משקל קטיף אחרון (גרם)"] + dfc["משקל קטיף ראשוני (גרם)"]
         dfc["סה\"כ קטיף (ק\"ג)"] = (total_g / 1000).round(2)
+
         dfc["ממוצע משקל לקופסא (גרם)"] = dfc.apply(
             lambda row: round(total_g.loc[row.name] / row["מספר קופסאות"], 2)
-            if row["מספר קופסאות"] > 0 else 0, axis=1
+            if row["מספר קופסאות"] > 0 else 0,
+            axis=1
+        )
+
+        dfc["% אובדן לפני קטיף אחרון"] = dfc.apply(
+            lambda row: round(
+                (row["מספר קופסאות לקטיף ראשוני"] + row["מספר קופסאות פגומות"]) / row["מספר קופסאות"] * 100
+                if row["מספר קופסאות"] > 0 else 0,
+                1
+            ),
+            axis=1
         )
 
         st.subheader("תרביות בשלב קטיף אחרון")
