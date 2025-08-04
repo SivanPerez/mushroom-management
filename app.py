@@ -385,6 +385,7 @@ def create_dashboard(data):
                     xaxis_title="גרם לקופסא",
                     yaxis_title="תרבית",
                     height=500,
+                    width=800,
                     margin=dict(t=60, b=40, l=100),
                     bargap=0.4,
                     yaxis = dict(
@@ -392,7 +393,7 @@ def create_dashboard(data):
                         categoryarray=top_20.sort_values("ממוצע גרם לקופסא", ascending=True)["תרבית"].tolist()
                     )
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"top-cultures-{box_type}")
+                st.plotly_chart(fig, use_container_width=False, key=f"top-cultures-{box_type}")
 
     # --- ממוצע משקל חודשי לקופסה (עמודות) לפי תאריך קטיף אחרון ---
     st.subheader("ממוצע משקל חודשי לקופסה")
