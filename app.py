@@ -300,7 +300,7 @@ def create_dashboard(data):
                 yaxis=dict(automargin=True, rangemode="tozero")
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="harvest-monthly")
         else:
             st.info("אין עדיין נתוני קטיף להצגה בגרף.")
 
@@ -316,7 +316,8 @@ def create_dashboard(data):
                 margin=dict(t=80, b=40),
                 yaxis=dict(automargin=True, rangemode="tozero")
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="harvest-monthly-empty")
+
 
 
     with col1:
@@ -468,7 +469,8 @@ def create_dashboard(data):
                     uniformtext_minsize=10,
                     uniformtext_mode="hide"
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key=f"box-type-{box_type}")
+
 
                 # חיווי על הממוצע של החודש האחרון (עם st.metric)
                 if len(box_df) >= 1:
