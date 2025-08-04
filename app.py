@@ -319,14 +319,14 @@ def create_dashboard(data):
             st.plotly_chart(fig, use_container_width=True, key="harvest-monthly-empty")
 
 
-
-    with col1:
-        # === גרף אופקי: 20 התרביות האחרונות עם גרדיאנט צבעים ===
-        st.subheader("🏆 תרביות מובילות")
+        st.subheader("🏆 תרביות מובילות לפי סוג קופסה")
 
         culture_avgs = []
         for culture in valid_data:
             if culture.get("שלב") != "קטיף אחרון":
+                continue
+            box_type = culture.get("סוג קופסא")
+            if box_type not in ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר"]:
                 continue
             total_boxes = int(culture.get("מספר קופסאות", 0))
             total_weight_g = (
@@ -337,56 +337,58 @@ def create_dashboard(data):
                 avg_per_box = total_weight_g / total_boxes
                 culture_avgs.append({
                     "תרבית": culture.get("תרבית", "לא ידוע"),
-                    "ממוצע גרם לקופסא": avg_per_box
+                    "ממוצע גרם לקופסא": avg_per_box,
+                    "סוג קופסא": box_type
                 })
 
-        if culture_avgs:
-            df_cultures = pd.DataFrame(culture_avgs)
-            top_20 = df_cultures.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
-            top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=True)  # למיון עולה – הגבוה למעלה
+        df_cultures = pd.DataFrame(culture_avgs)
 
-            # קביעת טווח לגרדיאנט
+        col1, col2 = st.columns(2)
+        for col, (box_type, color) in zip([col1, col2],
+                                          [("קופסא שחורה עגולה", "#1F77B4"), ("קופסא מלבנית 4.5 ליטר", "#E67E22")]):
+            df_filtered = df_cultures[df_cultures["סוג קופסא"] == box_type]
+            if df_filtered.empty:
+                with col:
+                    st.info(f"אין נתונים עבור {box_type}")
+                continue
+
+            top_20 = df_filtered.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
             min_val, max_val = top_20["ממוצע גרם לקופסא"].min(), top_20["ממוצע גרם לקופסא"].max()
 
-            # פונקציה לחישוב צבע גרדיאנט (מאדום לירוק דרך צהוב)
             def get_gradient_color(value, vmin, vmax):
-                # מחשבים יחס בין 0 ל-1
                 ratio = (value - vmin) / (vmax - vmin + 1e-6)
-                # מיפוי גס: 0 -> אדום (#E74C3C), 0.5 -> צהוב (#F1C40F), 1 -> ירוק (#2ECC71)
                 if ratio < 0.5:
-                    # מעבר אדום -> צהוב
-                    r = int(231 + (241 - 231) * (ratio / 0.5))  # R בין 231 ל-241
-                    g = int(76 + (196 - 76) * (ratio / 0.5))  # G בין 76 ל-196
-                    b = int(60 + (15 - 60) * (ratio / 0.5))  # B בין 60 ל-15
+                    r = int(231 + (241 - 231) * (ratio / 0.5))
+                    g = int(76 + (196 - 76) * (ratio / 0.5))
+                    b = int(60 + (15 - 60) * (ratio / 0.5))
                 else:
-                    # מעבר צהוב -> ירוק
-                    r = int(241 + (46 - 241) * ((ratio - 0.5) / 0.5))  # R בין 241 ל-46
-                    g = int(196 + (204 - 196) * ((ratio - 0.5) / 0.5))  # G בין 196 ל-204
-                    b = int(15 + (113 - 15) * ((ratio - 0.5) / 0.5))  # B בין 15 ל-113
+                    r = int(241 + (46 - 241) * ((ratio - 0.5) / 0.5))
+                    g = int(196 + (204 - 196) * ((ratio - 0.5) / 0.5))
+                    b = int(15 + (113 - 15) * ((ratio - 0.5) / 0.5))
                 return f"rgb({r},{g},{b})"
 
             bar_colors = [get_gradient_color(v, min_val, max_val) for v in top_20["ממוצע גרם לקופסא"]]
 
-            fig_top = go.Figure()
-            fig_top.add_trace(go.Bar(
-                x=top_20["ממוצע גרם לקופסא"],
-                y=top_20["תרבית"],
-                orientation="h",
-                marker_color=bar_colors,
-                text=top_20["ממוצע גרם לקופסא"].round(1),
-                textposition="outside"
-            ))
-
-            fig_top.update_layout(
-                title="ממוצע משקל קופסא",
-                xaxis_title="ממוצע גרם לקופסא",
-                yaxis_title="תרבית",
-                height=600,
-                width=650,  # תצוגה קצת רחבה יותר לגרדיאנט
-                margin=dict(t=60, b=40, l=100),
-                bargap=0.4
-            )
-            st.plotly_chart(fig_top, use_container_width=False)
+            with col:
+                st.markdown(f"#### {box_type}")
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=top_20["ממוצע גרם לקופסא"],
+                    y=top_20["תרבית"],
+                    orientation="h",
+                    marker_color=bar_colors,
+                    text=top_20["ממוצע גרם לקופסא"].round(1),
+                    textposition="outside"
+                ))
+                fig.update_layout(
+                    title="תרביות עם ממוצע משקל גבוה",
+                    xaxis_title="גרם לקופסא",
+                    yaxis_title="תרבית",
+                    height=500,
+                    margin=dict(t=60, b=40, l=100),
+                    bargap=0.4
+                )
+                st.plotly_chart(fig, use_container_width=True, key=f"top-cultures-{box_type}")
 
     # --- ממוצע משקל חודשי לקופסה (עמודות) לפי תאריך קטיף אחרון ---
     st.subheader("ממוצע משקל חודשי לקופסה")
