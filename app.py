@@ -342,11 +342,11 @@ def create_dashboard(data):
 
         if culture_avgs:
             df_cultures = pd.DataFrame(culture_avgs)
-            last_20 = df_cultures.tail(20)
-            last_20 = last_20.sort_values("ממוצע גרם לקופסא", ascending=True)  # הגבוה למעלה
+            top_20 = df_cultures.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
+            top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=True)  # למיון עולה – הגבוה למעלה
 
             # קביעת טווח לגרדיאנט
-            min_val, max_val = last_20["ממוצע גרם לקופסא"].min(), last_20["ממוצע גרם לקופסא"].max()
+            min_val, max_val = top_20["ממוצע גרם לקופסא"].min(), top_20["ממוצע גרם לקופסא"].max()
 
             # פונקציה לחישוב צבע גרדיאנט (מאדום לירוק דרך צהוב)
             def get_gradient_color(value, vmin, vmax):
@@ -365,15 +365,15 @@ def create_dashboard(data):
                     b = int(15 + (113 - 15) * ((ratio - 0.5) / 0.5))  # B בין 15 ל-113
                 return f"rgb({r},{g},{b})"
 
-            bar_colors = [get_gradient_color(v, min_val, max_val) for v in last_20["ממוצע גרם לקופסא"]]
+            bar_colors = [get_gradient_color(v, min_val, max_val) for v in top_20["ממוצע גרם לקופסא"]]
 
             fig_top = go.Figure()
             fig_top.add_trace(go.Bar(
-                x=last_20["ממוצע גרם לקופסא"],
-                y=last_20["תרבית"],
+                x=top_20["ממוצע גרם לקופסא"],
+                y=top_20["תרבית"],
                 orientation="h",
                 marker_color=bar_colors,
-                text=last_20["ממוצע גרם לקופסא"].round(1),
+                text=top_20["ממוצע גרם לקופסא"].round(1),
                 textposition="outside"
             ))
 
