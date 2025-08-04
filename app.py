@@ -250,7 +250,6 @@ def create_dashboard(data):
 
 
     # --- גרף קטיף חודשי בק"ג ---
-        st.warning("טעינה של גרף קטיף חודשי")
         st.subheader("📈 קטיף חודשי (בקילוגרמים)")
 
         # שליפת נתוני קטיף (חודש מלא)
@@ -317,7 +316,6 @@ def create_dashboard(data):
                 yaxis=dict(automargin=True, rangemode="tozero")
             )
             st.plotly_chart(fig, use_container_width=True, key="harvest-monthly-empty")
-
 
         st.subheader("🏆 תרביות מובילות לפי סוג קופסה")
 
