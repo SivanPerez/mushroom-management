@@ -250,6 +250,7 @@ def create_dashboard(data):
 
 
     # --- גרף קטיף חודשי בק"ג ---
+        st.warning("טעינה של גרף קטיף חודשי")
         st.subheader("📈 קטיף חודשי (בקילוגרמים)")
 
         # שליפת נתוני קטיף (חודש מלא)
