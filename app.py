@@ -352,7 +352,7 @@ def create_dashboard(data):
                 continue
 
             top_20 = df_filtered.sort_values("ממוצע גרם לקופסא", ascending=True).tail(20)
-            top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=False)
+            top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
             min_val, max_val = top_20["ממוצע גרם לקופסא"].min(), top_20["ממוצע גרם לקופסא"].max()
 
             def get_gradient_color(value, vmin, vmax):
@@ -387,8 +387,9 @@ def create_dashboard(data):
                     height=500,
                     margin=dict(t=60, b=40, l=100),
                     bargap=0.4,
-                    yaxis = dict(categoryorder="array",
-                                 categoryarray=top_20["תרבית"].tolist()
+                    yaxis = dict(
+                        categoryorder="array",
+                        categoryarray=top_20.sort_values("ממוצע גרם לקופסא", ascending=True)["תרבית"].tolist()
                     )
                 )
                 st.plotly_chart(fig, use_container_width=True, key=f"top-cultures-{box_type}")
