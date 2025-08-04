@@ -244,7 +244,9 @@ def create_dashboard(data):
 
         with cols[idx]:
             fig = draw_room_donut(room, occupancy_pct, color, count, capacity)
-            st.plotly_chart(fig, use_container_width=False, key=f"donut-{room}-{idx}")
+            import uuid
+            unique_id = str(uuid.uuid4())
+            st.plotly_chart(fig, use_container_width=False, key=f"donut-{unique_id}")
 
     col1, col2 = st.columns(2)
     with col2:
