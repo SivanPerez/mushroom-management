@@ -250,148 +250,148 @@ def create_dashboard(data):
 
 
     # --- גרף קטיף חודשי בק"ג ---
-        st.subheader("📈 קטיף חודשי (בקילוגרמים)")
+    st.subheader("📈 קטיף חודשי (בקילוגרמים)")
 
-        # שליפת נתוני קטיף (חודש מלא)
-        harvest_data = []
-        for culture in valid_data:
-            for harvest_type in ["קטיף ראשוני", "קטיף אחרון"]:
-                date_key = f"תאריך {harvest_type}"
-                weight_key = f"משקל {harvest_type} (גרם)"
-                if date_key in culture and weight_key in culture:
-                    try:
-                        date_obj = datetime.strptime(culture[date_key], "%Y-%m-%d")
-                        start_of_month = date_obj.replace(day=1)  # עיגול ל-1 בחודש
-                        kg = float(culture.get(weight_key, 0)) / 1000
-                        harvest_data.append({
-                            "חודש": start_of_month.strftime("%Y-%m"),  # נשאר מחרוזת
-                            "קילוגרמים": kg
-                        })
-                    except:
-                        continue
+    # שליפת נתוני קטיף (חודש מלא)
+    harvest_data = []
+    for culture in valid_data:
+        for harvest_type in ["קטיף ראשוני", "קטיף אחרון"]:
+            date_key = f"תאריך {harvest_type}"
+            weight_key = f"משקל {harvest_type} (גרם)"
+            if date_key in culture and weight_key in culture:
+                try:
+                    date_obj = datetime.strptime(culture[date_key], "%Y-%m-%d")
+                    start_of_month = date_obj.replace(day=1)  # עיגול ל-1 בחודש
+                    kg = float(culture.get(weight_key, 0)) / 1000
+                    harvest_data.append({
+                        "חודש": start_of_month.strftime("%Y-%m"),  # נשאר מחרוזת
+                        "קילוגרמים": kg
+                    })
+                except:
+                    continue
 
-        if harvest_data:
-            df_harvest = pd.DataFrame(harvest_data)
-            monthly = df_harvest.groupby("חודש", as_index=False)["קילוגרמים"].sum()
+    if harvest_data:
+        df_harvest = pd.DataFrame(harvest_data)
+        monthly = df_harvest.groupby("חודש", as_index=False)["קילוגרמים"].sum()
 
-            # הפיכת הציר לקטגוריות (ולא תאריך)
-            monthly["חודש"] = monthly["חודש"].astype(str)
+        # הפיכת הציר לקטגוריות (ולא תאריך)
+        monthly["חודש"] = monthly["חודש"].astype(str)
 
-            # גרף
+        # גרף
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=monthly["חודש"],
+            y=monthly["קילוגרמים"],
+            name="סה\"כ ק\"ג",
+            text=monthly["קילוגרמים"].round(1),
+            textposition="outside",
+            marker_color="royalblue"
+        ))
+
+        fig.update_layout(
+            title="קטיף חודשי (סה\"כ ק\"ג)",
+            xaxis_title="חודש",
+            yaxis_title="סה\"כ ק\"ג",
+            xaxis=dict(type="category"),  # ציר X קטגוריאלי
+            height=500,
+            bargap=0.3,
+            margin=dict(t=80, b=40),
+            yaxis=dict(automargin=True, rangemode="tozero")
+        )
+
+        st.plotly_chart(fig, use_container_width=True, key="harvest-monthly")
+    else:
+        st.info("אין עדיין נתוני קטיף להצגה בגרף.")
+
+        # יצירת גרף ריק עם צירים בלבד
+        fig = go.Figure()
+        fig.update_layout(
+            title="קטיף חודשי (אין נתונים)",
+            xaxis_title="חודש",
+            yaxis_title="סה\"כ ק\"ג",
+            xaxis=dict(type="category"),
+            height=500,
+            bargap=0.3,
+            margin=dict(t=80, b=40),
+            yaxis=dict(automargin=True, rangemode="tozero")
+        )
+        st.plotly_chart(fig, use_container_width=True, key="harvest-monthly-empty")
+
+    st.subheader("🏆 תרביות מובילות לפי סוג קופסה")
+
+    culture_avgs = []
+    for culture in valid_data:
+        if culture.get("שלב") != "קטיף אחרון":
+            continue
+        box_type = culture.get("סוג קופסא")
+        if box_type not in ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר"]:
+            continue
+        total_boxes = int(culture.get("מספר קופסאות", 0))
+        total_weight_g = (
+                float(culture.get("משקל קטיף ראשוני (גרם)", 0)) +
+                float(culture.get("משקל קטיף אחרון (גרם)", 0))
+        )
+        if total_boxes > 0:
+            avg_per_box = total_weight_g / total_boxes
+            culture_avgs.append({
+                "תרבית": culture.get("תרבית", "לא ידוע"),
+                "ממוצע גרם לקופסא": avg_per_box,
+                "סוג קופסא": box_type
+            })
+
+    df_cultures = pd.DataFrame(culture_avgs)
+
+    col1, col2 = st.columns(2)
+    for col, (box_type, color) in zip([col1, col2],
+                                      [("קופסא שחורה עגולה", "#1F77B4"), ("קופסא מלבנית 4.5 ליטר", "#E67E22")]):
+        df_filtered = df_cultures[df_cultures["סוג קופסא"] == box_type]
+        if df_filtered.empty:
+            with col:
+                st.info(f"אין נתונים עבור {box_type}")
+            continue
+
+        top_20 = df_filtered.sort_values("ממוצע גרם לקופסא", ascending=True).tail(20)
+        top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
+        min_val, max_val = top_20["ממוצע גרם לקופסא"].min(), top_20["ממוצע גרם לקופסא"].max()
+
+        def get_gradient_color(value, vmin, vmax):
+            ratio = (value - vmin) / (vmax - vmin + 1e-6)
+            if ratio < 0.5:
+                r = int(231 + (241 - 231) * (ratio / 0.5))
+                g = int(76 + (196 - 76) * (ratio / 0.5))
+                b = int(60 + (15 - 60) * (ratio / 0.5))
+            else:
+                r = int(241 + (46 - 241) * ((ratio - 0.5) / 0.5))
+                g = int(196 + (204 - 196) * ((ratio - 0.5) / 0.5))
+                b = int(15 + (113 - 15) * ((ratio - 0.5) / 0.5))
+            return f"rgb({r},{g},{b})"
+
+        bar_colors = [get_gradient_color(v, min_val, max_val) for v in top_20["ממוצע גרם לקופסא"]]
+
+        with col:
+            st.markdown(f"#### {box_type}")
             fig = go.Figure()
             fig.add_trace(go.Bar(
-                x=monthly["חודש"],
-                y=monthly["קילוגרמים"],
-                name="סה\"כ ק\"ג",
-                text=monthly["קילוגרמים"].round(1),
-                textposition="outside",
-                marker_color="royalblue"
+                x=top_20["ממוצע גרם לקופסא"],
+                y=top_20["תרבית"],
+                orientation="h",
+                marker_color=bar_colors,
+                text=top_20["ממוצע גרם לקופסא"].round(1),
+                textposition="outside"
             ))
-
             fig.update_layout(
-                title="קטיף חודשי (סה\"כ ק\"ג)",
-                xaxis_title="חודש",
-                yaxis_title="סה\"כ ק\"ג",
-                xaxis=dict(type="category"),  # ציר X קטגוריאלי
+                title="תרביות עם ממוצע משקל גבוה",
+                xaxis_title="גרם לקופסא",
+                yaxis_title="תרבית",
                 height=500,
-                bargap=0.3,
-                margin=dict(t=80, b=40),
-                yaxis=dict(automargin=True, rangemode="tozero")
-            )
-
-            st.plotly_chart(fig, use_container_width=True, key="harvest-monthly")
-        else:
-            st.info("אין עדיין נתוני קטיף להצגה בגרף.")
-
-            # יצירת גרף ריק עם צירים בלבד
-            fig = go.Figure()
-            fig.update_layout(
-                title="קטיף חודשי (אין נתונים)",
-                xaxis_title="חודש",
-                yaxis_title="סה\"כ ק\"ג",
-                xaxis=dict(type="category"),
-                height=500,
-                bargap=0.3,
-                margin=dict(t=80, b=40),
-                yaxis=dict(automargin=True, rangemode="tozero")
-            )
-            st.plotly_chart(fig, use_container_width=True, key="harvest-monthly-empty")
-
-        st.subheader("🏆 תרביות מובילות לפי סוג קופסה")
-
-        culture_avgs = []
-        for culture in valid_data:
-            if culture.get("שלב") != "קטיף אחרון":
-                continue
-            box_type = culture.get("סוג קופסא")
-            if box_type not in ["קופסא שחורה עגולה", "קופסא מלבנית 4.5 ליטר"]:
-                continue
-            total_boxes = int(culture.get("מספר קופסאות", 0))
-            total_weight_g = (
-                    float(culture.get("משקל קטיף ראשוני (גרם)", 0)) +
-                    float(culture.get("משקל קטיף אחרון (גרם)", 0))
-            )
-            if total_boxes > 0:
-                avg_per_box = total_weight_g / total_boxes
-                culture_avgs.append({
-                    "תרבית": culture.get("תרבית", "לא ידוע"),
-                    "ממוצע גרם לקופסא": avg_per_box,
-                    "סוג קופסא": box_type
-                })
-
-        df_cultures = pd.DataFrame(culture_avgs)
-
-        col1, col2 = st.columns(2)
-        for col, (box_type, color) in zip([col1, col2],
-                                          [("קופסא שחורה עגולה", "#1F77B4"), ("קופסא מלבנית 4.5 ליטר", "#E67E22")]):
-            df_filtered = df_cultures[df_cultures["סוג קופסא"] == box_type]
-            if df_filtered.empty:
-                with col:
-                    st.info(f"אין נתונים עבור {box_type}")
-                continue
-
-            top_20 = df_filtered.sort_values("ממוצע גרם לקופסא", ascending=True).tail(20)
-            top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
-            min_val, max_val = top_20["ממוצע גרם לקופסא"].min(), top_20["ממוצע גרם לקופסא"].max()
-
-            def get_gradient_color(value, vmin, vmax):
-                ratio = (value - vmin) / (vmax - vmin + 1e-6)
-                if ratio < 0.5:
-                    r = int(231 + (241 - 231) * (ratio / 0.5))
-                    g = int(76 + (196 - 76) * (ratio / 0.5))
-                    b = int(60 + (15 - 60) * (ratio / 0.5))
-                else:
-                    r = int(241 + (46 - 241) * ((ratio - 0.5) / 0.5))
-                    g = int(196 + (204 - 196) * ((ratio - 0.5) / 0.5))
-                    b = int(15 + (113 - 15) * ((ratio - 0.5) / 0.5))
-                return f"rgb({r},{g},{b})"
-
-            bar_colors = [get_gradient_color(v, min_val, max_val) for v in top_20["ממוצע גרם לקופסא"]]
-
-            with col:
-                st.markdown(f"#### {box_type}")
-                fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    x=top_20["ממוצע גרם לקופסא"],
-                    y=top_20["תרבית"],
-                    orientation="h",
-                    marker_color=bar_colors,
-                    text=top_20["ממוצע גרם לקופסא"].round(1),
-                    textposition="outside"
-                ))
-                fig.update_layout(
-                    title="תרביות עם ממוצע משקל גבוה",
-                    xaxis_title="גרם לקופסא",
-                    yaxis_title="תרבית",
-                    height=500,
-                    margin=dict(t=60, b=40, l=100),
-                    bargap=0.4,
-                    yaxis = dict(
-                        categoryorder="array",
-                        categoryarray=top_20.sort_values("ממוצע גרם לקופסא", ascending=True)["תרבית"].tolist()
-                    )
+                margin=dict(t=60, b=40, l=100),
+                bargap=0.4,
+                yaxis=dict(
+                    categoryorder="array",
+                    categoryarray=top_20.sort_values("ממוצע גרם לקופסא", ascending=True)["תרבית"].tolist()
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"top-cultures-{box_type}")
+            )
+            st.plotly_chart(fig, use_container_width=True, key=f"top-cultures-{box_type}")
 
     # --- ממוצע משקל חודשי לקופסה (עמודות) לפי תאריך קטיף אחרון ---
     st.subheader("ממוצע משקל חודשי לקופסה")
