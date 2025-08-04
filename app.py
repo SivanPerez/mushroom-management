@@ -248,8 +248,7 @@ def create_dashboard(data):
             unique_id = str(uuid.uuid4())
             st.plotly_chart(fig, use_container_width=False, key=f"donut-{unique_id}")
 
-    col1, col2 = st.columns(2)
-    with col2:
+
     # --- גרף קטיף חודשי בק"ג ---
         st.subheader("📈 קטיף חודשי (בקילוגרמים)")
 
@@ -352,7 +351,8 @@ def create_dashboard(data):
                     st.info(f"אין נתונים עבור {box_type}")
                 continue
 
-            top_20 = df_filtered.sort_values("ממוצע גרם לקופסא", ascending=False).head(20)
+            top_20 = df_filtered.sort_values("ממוצע גרם לקופסא", ascending=True).tail(20)
+            top_20 = top_20.sort_values("ממוצע גרם לקופסא", ascending=False)
             min_val, max_val = top_20["ממוצע גרם לקופסא"].min(), top_20["ממוצע גרם לקופסא"].max()
 
             def get_gradient_color(value, vmin, vmax):
