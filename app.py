@@ -27,7 +27,6 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, s
 client = gspread.authorize(creds)
 worksheet = client.open(DB_FILE).sheet1
 data = worksheet.get_all_records()
-create_dashboard(data)
 
 def update_record_by_id(record_id: int, updates: dict):
     """מחפש שורה לפי id ומעדכן את השדות שנשלחו בעדכון."""
@@ -130,7 +129,7 @@ def reverse_hebrew_text(text, flip=True):
     return text[::-1]  # הופך את כל הטקסט (רק אם יש עברית)
 
 def create_dashboard(data):
-
+    create_dashboard(data)
     # --- חישוב תפוסה באנדרלייט (כולל שלבים שממשיכים לתפוס מקום) ---
     valid_data = [c for c in data if isinstance(c, dict)]
 
