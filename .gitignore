@@ -1,2 +1,41 @@
-.venv/
+# קבצי מערכת של PyCharm
+.idea/
+*.iml
+
+# סביבות וירטואליות
 venv/
+.venv/
+env/
+ENV/
+
+# קבצי קומפילציה
+__pycache__/
+*.py[cod]
+*.pyo
+
+# קבצים זמניים
+*.log
+*.tmp
+*.bak
+
+# קבצים שנוצרים אוטומטית
+*.db
+*.sqlite
+.DS_Store
+Thumbs.db
+
+# מפתחות וסודות
+service_account.json
+*.key
+*.pem
+
+# גיבויים ונתוני ריצה
+backups/
+cordyceps.json
+*.pdf
+
+# Streamlit secrets (אם נשמרים מקומית)
+.secrets.toml
+
+# קבצים מהדפדפן
+*.swp
