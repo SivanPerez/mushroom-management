@@ -385,7 +385,7 @@ def create_dashboard(data):
                     xaxis_title="גרם לקופסא",
                     yaxis_title="תרבית",
                     height=500,
-                    width=800,
+                    width=1000,
                     margin=dict(t=60, b=40, l=100),
                     bargap=0.4,
                     yaxis = dict(
