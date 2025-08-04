@@ -504,7 +504,6 @@ def create_dashboard(data):
         © Sivan the Queen Of Cordyceps
     </div>
     """, unsafe_allow_html=True)
-create_dashboard(data)
 
 
 
