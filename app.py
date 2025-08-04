@@ -4,52 +4,60 @@ import streamlit as st
 import json
 import pandas as pd
 import plotly.graph_objects as go
-import shutil
-import subprocess
+import gspread
 
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import date
+from io import StringIO
 
-DB_FILE = "Data/Cordyceps.json"
-BACKUP_DIR = "backups"  # כל הגיבויים יישמרו פה
+DB_FILE = "cordyceps-db"  # שם הגיליון
 
-def push_to_git():
-    token = os.getenv("GITHUB_TOKEN")
-    repo = os.getenv("GITHUB_REPO")
-    if not token or not repo:
-        print("GitHub token or repo not configured.")
-        return
+# התחברות ל־Google Sheets
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+]
+service_account_info = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)client = gspread.authorize(creds)
+worksheet = client.open(DB_FILE).sheet1
 
-    try:
-        subprocess.run(["git", "config", "user.email", "bot@streamlit.com"], check=True)
-        subprocess.run(["git", "config", "user.name", "Streamlit Bot"], check=True)
-        subprocess.run(["git", "add", "DB_FILE"], check=True)
-        subprocess.run(["git", "commit", "-m", "Auto-update data"], check=True)
-        subprocess.run([
-            "git", "push",
-            f"https://{token}@github.com/{repo}.git"
-        ], check=True)
-        print("הנתונים נשמרו גם ב-GitHub.")
-    except Exception as e:
-        print("שגיאה בשמירה ל-GitHub:", e)
+def update_record_by_id(record_id: int, updates: dict):
+    """מחפש שורה לפי id ומעדכן את השדות שנשלחו בעדכון."""
+    headers = worksheet.row_values(1)
+    records = worksheet.get_all_records()
+    for idx, row in enumerate(records):
+        if row.get("id") == record_id:
+            # השורה ב־gspread מתחילה משורה 2 כי שורת הכותרת היא 1
+            sheet_row_index = idx + 2
+            for key, value in updates.items():
+                if key in headers:
+                    col_index = headers.index(key) + 1  # עמודות הן 1-based
+                    worksheet.update_cell(sheet_row_index, col_index, value)
+            return True
+    return False  # לא נמצא
 
+def load_data():
+    """טוען את כל הנתונים מהגיליון כ־dictים (כמו JSON)."""
+    records = worksheet.get_all_records()
+    return records
 
-def backup_local():
-    """יוצר עותק יומי של קובץ הנתונים."""
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR)
+def get_next_id(data):
+    """מחשב את ה-id הבא לפי הנתונים הקיימים."""
+    return max([c.get('id', 0) for c in data], default=0) + 1
 
-    today = date.today().isoformat()
-    backup_name = f"cordyceps_{today}.json"
-    backup_path = os.path.join(BACKUP_DIR, backup_name)
-
-    if os.path.exists(DB_FILE) and not os.path.exists(backup_path):
-        shutil.copy(DB_FILE, backup_path)
-        print(f"גיבוי יומי נוצר: {backup_path}")
-
+def add_record(record: dict):
+    """מוסיף רשומה חדשה לשורה האחרונה בגיליון"""
+    headers = worksheet.row_values(1)
+    row = [record.get(col, "") for col in headers]
+    worksheet.append_row(row)
+def get_next_id(data):
+    """מקבל את הרשומות ומחזיר את ה-id הבא הפנוי"""
+    return max([c.get('id', 0) for c in data], default=0) + 1
 # רישום פונט Arial (כדי לתמוך בעברית)
 font_path = os.path.join(os.path.dirname(__file__), "Noto_Sans_Hebrew", "NotoSansHebrew-Regular.ttf")
 
@@ -94,10 +102,10 @@ def create_single_label_page(c, culture, page_size):
         ("קופסאות", str(culture.get("מספר קופסאות", "")), True, False),
     ]
 
-    c.setFont("Arial", 24)
+    c.setFont("NotoSansHebrew", 24)
     c.drawCentredString(page_size[0]/2, page_size[1]-40, f"ID: {rows[0][1]}")
 
-    c.setFont("Arial", 18)
+    c.setFont("NotoSansHebrew", 18)
     y_text = page_size[1] - 90
     for title, value, flip_title, flip_value in rows[1:]:
         title_fixed = reverse_hebrew_text(title, flip_title)
@@ -127,7 +135,7 @@ def create_dashboard(data):
     underlay_data = []
     for c in valid_data:
         stage = c.get("שלב")
-        boxes = int(c.get("מספר קופסאות", 0))
+        boxes = int(c.get("מספר קופסאות", 0) or 0)
 
         # תרביות באנדרלייט – כל הקופסאות
         if stage == "אנדרלייט":
@@ -135,13 +143,13 @@ def create_dashboard(data):
 
         # תרביות במיון – פחות פגומות
         elif stage == "מיון":
-            damaged = int(c.get("מספר קופסאות פגומות", 0))
+            damaged = int(c.get("מספר קופסאות פגומות", 0) or 0)
             underlay_data.append({"חדר": c.get("מיקום אנדרלייט", "לא צוין"), "קופסאות": max(boxes - damaged, 0)})
 
         # תרביות בקטיף ראשוני – פחות פגומות ופחות אלו שנכנסלו לקטיף מוקדם
         elif stage == "קטיף ראשוני":
-            damaged = int(c.get("מספר קופסאות פגומות", 0))
-            early = int(c.get("מספר קופסאות לקטיף ראשוני", 0))
+            damaged = int(c.get("מספר קופסאות פגומות", 0) or 0)
+            early = int(c.get("מספר קופסאות לקטיף ראשוני", 0) or 0)
             underlay_data.append(
                 {"חדר": c.get("מיקום אנדרלייט", "לא צוין"), "קופסאות": max(boxes - damaged - early, 0)})
 
@@ -293,18 +301,21 @@ def create_dashboard(data):
         else:
             st.info("אין עדיין נתוני קטיף להצגה בגרף.")
 
-            # גרף משולב
+            # יצירת גרף ריק עם צירים בלבד
             fig = go.Figure()
+            fig.update_layout(
+                title="קטיף חודשי (אין נתונים)",
+                xaxis_title="חודש",
+                yaxis_title="סה\"כ ק\"ג",
+                xaxis=dict(type="category"),
+                height=500,
+                bargap=0.3,
+                margin=dict(t=80, b=40),
+                yaxis=dict(automargin=True, rangemode="tozero")
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-            # עמודות
-            fig.add_trace(go.Bar(
-                x=monthly["חודש"],
-                y=monthly["קילוגרמים"],
-                name="סה\"כ ק\"ג",
-                text=monthly["קילוגרמים"].round(1),
-                textposition="outside",
-                marker_color="royalblue"
-            ))
+
     with col1:
         # === גרף אופקי: 20 התרביות האחרונות עם גרדיאנט צבעים ===
         st.subheader("🏆 תרביות מובילות")
@@ -543,21 +554,6 @@ def simple_login():
 if not simple_login():
     st.stop()
 
-# --- טעינה ושמירה ---
-def load_data():
-    try:
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return []
-
-
-def save_data(data):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    backup_local()  # יצירת גיבוי יומי אחרי כל שמירה
-    push_to_git()  # שמירה אוטומטית ב-GitHub
-
 def get_next_id(data):
     return max([c['id'] for c in data], default=0) + 1
 def show_backups_page():
@@ -604,7 +600,7 @@ st.markdown("""
     .main > div {
         direction: rtl;
         text-align: right;
-        font-family: Arial, sans-serif;
+        font-family: NotoSansHebrew, sans-serif;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -642,15 +638,17 @@ with tabs[1]:
                 "תרבית": strain,
                 "תאריך צלחת": str(plate_date)
             }
-            data.append(new_entry)
-            save_data(data)
+            add_record(new_entry)
+            data = load_data()
             st.success("הצלחת נוספה בהצלחה!")
             st.rerun()
     if plates:
         st.subheader("צלחות קיימות")
-        st.dataframe(pd.DataFrame(plates))
+        df_plates = pd.DataFrame(plates)
+        df_plates = df_plates.replace("", pd.NA)
+        df_plates = df_plates.dropna(axis=1, how="all")
 
-
+        st.dataframe(df_plates)
 
 # --- טאב 2: תרבית נוזלית ---
 with tabs[2]:
@@ -658,10 +656,9 @@ with tabs[2]:
     liquid_stage = [c for c in data if c.get("שלב") == "בקבוקי תרבית נוזלית"]
     if liquid_stage:
         st.subheader("בקבוקים במלאי")
-        # יוצרים DataFrame מהנתונים
         df1_disp = pd.DataFrame(liquid_stage)
-        # משנים שם עמודה
-        df1_disp = df1_disp.rename(columns={"מספר קופסאות": "מספר בקבוקים"})
+        df1_disp = df1_disp.replace("", pd.NA)
+        df1_disp = df1_disp.dropna(axis=1, how="all")
         st.dataframe(df1_disp)
 
     plates = [c for c in data if c.get("שלב") == "צלחות פטרי"]
@@ -676,9 +673,12 @@ with tabs[2]:
             if st.form_submit_button("צור בקבוקים"):
                 plate_id = options[selected]
                 plate = next(p for p in data if p["id"] == plate_id)
-                plate["שלב"] = "בקבוקי תרבית נוזלית"
-                plate["תאריך בקבוקים"] = str(bottle_date)
-                plate["מספר בקבוקים"] = bottle_count
+                update_record_by_id(plate["id"], {
+                    "שלב": "בקבוקי תרבית נוזלית",
+                    "תאריך בקבוקים": str(bottle_date),
+                    "מספר בקבוקים": bottle_count
+                })
+
                 for j in range(1, transfers + 1):
                     daughter = {
                         "id": get_next_id(data),
@@ -686,8 +686,10 @@ with tabs[2]:
                         "תרבית": f"{plate['תרבית']}-{j}",
                         "תאריך צלחת": str(date.today())
                     }
-                    data.append(daughter)
-                save_data(data)
+                    add_record(daughter)
+
+                data = load_data()
+
                 st.success(f"נוספו {transfers} צלחות בנות!")
                 st.rerun()
     else:
@@ -757,16 +759,14 @@ with tabs[3]:
                     st.error("אין מספיק בקבוקים!")
                 else:
                     # עדכון מלאי בקבוקים
-                    for c in all_data:
-                        if c["id"] == bottle_id:
-                            c["מספר בקבוקים"] = total_bottles - inoc_bottles
+                    # 1. עדכון מספר בקבוקים בתרבית המקור
+                    update_record_by_id(bottle_id, {
+                        "מספר בקבוקים": total_bottles - inoc_bottles
+                    })
 
-                    # הסרה אם נגמרו בקבוקים
-                    all_data = [c for c in all_data if c.get("מספר בקבוקים", 0) > 0 or c["id"] != bottle_id]
-
-                    # הוספת תרבית חדשה לאינקובציה
+                    # 2. יצירת תרבית חדשה בשלב אינקובציה
                     new_culture = {
-                        "id": get_next_id(all_data),
+                        "id": get_next_id(data),
                         "שלב": "אינקובציה",
                         "תרבית": bottle["תרבית"],
                         "תאריך אינקובציה": str(box_date),
@@ -776,9 +776,10 @@ with tabs[3]:
                         "מספר בקבוקים": inoc_bottles,
                         "מספר קופסאות": box_count
                     }
-                    all_data.append(new_culture)
+                    add_record(new_culture)
 
-                    save_data(all_data)
+                    data = load_data()
+
                     st.success(f"אינקובציה בוצעה! {inoc_bottles} בקבוקים → {box_count} קופסאות")
                     st.rerun()
 
@@ -786,10 +787,15 @@ with tabs[3]:
         st.info("אין בקבוקים זמינים לאינקובציה.")
 
     # הצגת תרביות שכבר בשלב אינקובציה
+    # הצגת תרביות שכבר בשלב אינקובציה
     incubations = [c for c in data if c.get("שלב") == "אינקובציה"]
     if incubations:
         st.subheader("תרביות בשלב אינקובציה")
-        st.dataframe(pd.DataFrame(incubations))
+        df_incubations = pd.DataFrame(incubations)
+        df_incubations = df_incubations.replace("", pd.NA)
+        df_incubations = df_incubations.dropna(axis=1, how="all")
+
+        st.dataframe(df_incubations)
 
 # --- טאב מדבקות ---
 with tabs[4]:
@@ -840,18 +846,28 @@ with tabs[5]:
             room = st.selectbox("מיקום אנדרלייט", ["חדר 4", "חדר 5", "חדר 7"])
             if st.form_submit_button("סיום העברה"):
                 c_id = options[selected]
-                culture = next(c for c in data if c["id"] == c_id)
-                culture.update({"שלב": "אנדרלייט", "תאריך אנדרלייט": str(tdate), "מיקום אנדרלייט": room})
-                save_data(data)
+                update_record_by_id(c_id, {
+                    "שלב": "אנדרלייט",
+                    "תאריך אנדרלייט": str(tdate),
+                    "מיקום אנדרלייט": room
+                })
+                data = load_data()
                 st.success("בוצעה העברה לאנדרלייט!")
                 st.rerun()
+
     else:
         st.info("אין תרביות זמינות להעברה לשלב אנדרלייט.")
 
     dfc = pd.DataFrame([c for c in data if c.get("שלב") == "אנדרלייט"])
     if not dfc.empty:
         st.subheader("תרביות בשלב אנדרלייט")
+
+        # החלפה של ערכים ריקים ל־Na כדי לסנן עמודות ריקות
+        dfc = dfc.replace("", pd.NA)
+        dfc = dfc.dropna(axis=1, how="all")
+
         st.dataframe(dfc)
+
     else:
         st.info("אין תרביות בשלב אנדרלייט.")
 
@@ -872,14 +888,14 @@ with tabs[6]:
             partial = st.number_input("מספר קופסאות לקטיף ראשוני", min_value=0)
             if st.form_submit_button("סיום מיון"):
                 c_id = options[selected]
-                culture = next(c for c in data if c["id"] == c_id)
-                culture.update({
+                update_record_by_id(c_id, {
                     "שלב": "מיון",
                     "תאריך מיון": str(tdate),
                     "מספר קופסאות פגומות": damaged,
                     "מספר קופסאות לקטיף ראשוני": partial
                 })
-                save_data(data)
+                data = load_data()
+
                 st.success("בוצע מיון!")
                 st.rerun()
     else:
@@ -888,10 +904,11 @@ with tabs[6]:
     dfc = pd.DataFrame([c for c in data if c.get("שלב") == "מיון"])
     if not dfc.empty:
         st.subheader("תרביות בשלב מיון")
-        st.dataframe(dfc)
+        non_empty_cols = dfc.loc[:,
+                         dfc.apply(lambda col: col.astype(str).str.strip().replace('nan', '').astype(bool).any())]
+        st.dataframe(non_empty_cols)
     else:
         st.info("אין תרביות בשלב מיון.")
-
 
 # --- טאב קטיף ראשוני ---
 with tabs[7]:
@@ -908,13 +925,13 @@ with tabs[7]:
             weight = st.number_input("משקל קטיף ראשוני (גרם)", min_value=0)
             if st.form_submit_button("סיום קטיף ראשוני"):
                 c_id = options[selected]
-                culture = next(c for c in data if c["id"] == c_id)
-                culture.update({
+                update_record_by_id(c_id, {
                     "שלב": "קטיף ראשוני",
                     "תאריך קטיף ראשוני": str(tdate),
                     "משקל קטיף ראשוני (גרם)": weight
                 })
-                save_data(data)
+                data = load_data()
+
                 st.success("בוצע קטיף ראשוני!")
                 st.rerun()
     else:
@@ -923,10 +940,11 @@ with tabs[7]:
     dfc = pd.DataFrame([c for c in data if c.get("שלב") == "קטיף ראשוני"])
     if not dfc.empty:
         st.subheader("תרביות בשלב קטיף ראשוני")
-        st.dataframe(dfc)
+        non_empty_cols = dfc.loc[:,
+                         dfc.apply(lambda col: col.astype(str).str.strip().replace('nan', '').astype(bool).any())]
+        st.dataframe(non_empty_cols)
     else:
         st.info("אין תרביות בשלב קטיף ראשוני.")
-
 
 # --- טאב קטיף אחרון ---
 with tabs[8]:
@@ -943,16 +961,14 @@ with tabs[8]:
             weight = st.number_input("משקל קטיף אחרון (גרם)", min_value=0)
             if st.form_submit_button("סיום קטיף אחרון"):
                 c_id = options[selected]
-                culture = next(c for c in data if c["id"] == c_id)
-                culture.update({
+                update_record_by_id(c_id, {
                     "שלב": "קטיף אחרון",
                     "סטטוס": "נקטף במלואו",
                     "תאריך קטיף אחרון": str(tdate),
-                    "משקל קטיף אחרון (גרם)": weight
+                    "משקל קטיף אחרון (גרם)": weight,
                 })
-                # מסירים את מיקום האנדרלייט אם נשאר
-                culture.pop("מיקום אנדרלייט", None)
-                save_data(data)
+                data = load_data()
+
                 st.success("בוצע קטיף אחרון!")
                 st.rerun()
     else:
@@ -982,7 +998,9 @@ with tabs[8]:
         )
 
         st.subheader("תרביות בשלב קטיף אחרון")
-        st.dataframe(dfc)
+        non_empty_cols = dfc.loc[:,
+                         dfc.apply(lambda col: col.astype(str).str.strip().replace('nan', '').astype(bool).any())]
+        st.dataframe(non_empty_cols)
     else:
         st.info("אין תרביות בשלב קטיף אחרון.")
 
