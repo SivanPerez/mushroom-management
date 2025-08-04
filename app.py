@@ -129,7 +129,6 @@ def reverse_hebrew_text(text, flip=True):
     return text[::-1]  # הופך את כל הטקסט (רק אם יש עברית)
 
 def create_dashboard(data):
-    create_dashboard(data)
     # --- חישוב תפוסה באנדרלייט (כולל שלבים שממשיכים לתפוס מקום) ---
     valid_data = [c for c in data if isinstance(c, dict)]
 
@@ -501,6 +500,7 @@ def create_dashboard(data):
         © Sivan the Queen Of Cordyceps
     </div>
     """, unsafe_allow_html=True)
+create_dashboard(data)
 
 
 
