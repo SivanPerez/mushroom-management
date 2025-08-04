@@ -4,3 +4,5 @@ streamlit-authenticator
 numpy
 plotly
 reportlab
+gspread
+oauth2client
