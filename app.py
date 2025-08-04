@@ -25,7 +25,7 @@ scope = [
 service_account_info = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
 creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
 client = gspread.authorize(creds)
-worksheet = client.open(DB_FILE).sheet1
+worksheet = client.open("cordyceps-db").sheet1
 data = worksheet.get_all_records()
 
 def update_record_by_id(record_id: int, updates: dict):
