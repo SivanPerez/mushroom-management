@@ -89,7 +89,7 @@ def create_single_label_page(c, culture, page_size):
 
     incubation_date = culture.get("תאריך אינקובציה", "")
     try:
-        underlight_date = (datetime.strptime(incubation_date, "%Y-%m-%d") + timedelta(days=7)).strftime("%Y-%m-%d")
+        underlight_date = (datetime.strptime(incubation_date, "%d/%m/%Y") + timedelta(days=7)).strftime("%Y-%m-%d")
     except:
         underlight_date = ""
 
@@ -260,7 +260,7 @@ def create_dashboard(data):
             weight_key = f"משקל {harvest_type} (גרם)"
             if date_key in culture and weight_key in culture:
                 try:
-                    date_obj = datetime.strptime(culture[date_key], "%Y-%m-%d")
+                    date_obj = datetime.strptime(culture[date_key], "%d/%m/%Y")
                     start_of_month = date_obj.replace(day=1)  # עיגול ל-1 בחודש
                     kg = float(culture.get(weight_key, 0)) / 1000
                     harvest_data.append({
@@ -410,7 +410,7 @@ def create_dashboard(data):
         )
         if total_boxes > 0:
             try:
-                date_obj = datetime.strptime(culture["תאריך קטיף אחרון"], "%Y-%m-%d")
+                date_obj = datetime.strptime(culture["תאריך קטיף אחרון"], "%d/%m/%Y")
                 avg_per_box = total_weight_g / total_boxes
                 box_data.append({
                     "חודש": date_obj.strftime("%Y-%m"),
