@@ -386,10 +386,10 @@ def create_dashboard(data):
                     yaxis_title="תרבית",
                     height=500,
                     margin=dict(t=60, b=40, l=100),
-                    bargap=0.4
+                    bargap=0.4,
                     yaxis = dict(categoryorder="array",
                                  categoryarray=top_20["תרבית"].tolist()
-                    )  # ← כאן הפתרון
+                    )
                 )
                 st.plotly_chart(fig, use_container_width=True, key=f"top-cultures-{box_type}")
 
