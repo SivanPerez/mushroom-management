@@ -646,7 +646,7 @@ with tabs[1]:
                 "id": get_next_id(data),
                 "שלב": "צלחות פטרי",
                 "תרבית": strain,
-                "תאריך צלחת": str(plate_date)
+                "תאריך צלחת": plate_date.strftime("%d/%m/%Y")
             }
             add_record(new_entry)
             data = load_data()
@@ -685,7 +685,7 @@ with tabs[2]:
                 plate = next(p for p in data if p["id"] == plate_id)
                 update_record_by_id(plate["id"], {
                     "שלב": "בקבוקי תרבית נוזלית",
-                    "תאריך בקבוקים": str(bottle_date),
+                    "תאריך בקבוקים": bottle_date.strftime("%d/%m/%Y"),
                     "מספר בקבוקים": bottle_count
                 })
 
@@ -694,7 +694,7 @@ with tabs[2]:
                         "id": get_next_id(data),
                         "שלב": "צלחות פטרי",
                         "תרבית": f"{plate['תרבית']}-{j}",
-                        "תאריך צלחת": str(date.today())
+                        "תאריך צלחת": date.today().strftime("%d/%m/%Y")
                     }
                     add_record(daughter)
 
@@ -779,7 +779,7 @@ with tabs[3]:
                         "id": get_next_id(data),
                         "שלב": "אינקובציה",
                         "תרבית": bottle["תרבית"],
-                        "תאריך אינקובציה": str(box_date),
+                        "תאריך אינקובציה": box_date.strftime("%d/%m/%Y"),
                         "מצע": substrate_value or "לא צוין",
                         "משך קיטור בשעות": sterilization_value or "לא צוין",
                         "סוג קופסא": box_type_value or "לא צוין",
@@ -858,7 +858,7 @@ with tabs[5]:
                 c_id = options[selected]
                 update_record_by_id(c_id, {
                     "שלב": "אנדרלייט",
-                    "תאריך אנדרלייט": str(tdate),
+                    "תאריך אנדרלייט": tdate.strftime("%d/%m/%Y"),
                     "מיקום אנדרלייט": room
                 })
                 data = load_data()
@@ -900,7 +900,7 @@ with tabs[6]:
                 c_id = options[selected]
                 update_record_by_id(c_id, {
                     "שלב": "מיון",
-                    "תאריך מיון": str(tdate),
+                    "תאריך מיון": tdate.strftime("%d/%m/%Y"),
                     "מספר קופסאות פגומות": damaged,
                     "מספר קופסאות לקטיף ראשוני": partial
                 })
@@ -937,7 +937,7 @@ with tabs[7]:
                 c_id = options[selected]
                 update_record_by_id(c_id, {
                     "שלב": "קטיף ראשוני",
-                    "תאריך קטיף ראשוני": str(tdate),
+                    "תאריך קטיף ראשוני": tdate.strftime("%d/%m/%Y"),
                     "משקל קטיף ראשוני (גרם)": weight
                 })
                 data = load_data()
@@ -974,7 +974,7 @@ with tabs[8]:
                 update_record_by_id(c_id, {
                     "שלב": "קטיף אחרון",
                     "סטטוס": "נקטף במלואו",
-                    "תאריך קטיף אחרון": str(tdate),
+                    "תאריך קטיף אחרון": tdate.strftime("%d/%m/%Y"),
                     "משקל קטיף אחרון (גרם)": weight,
                     "סה\"כ קטיף (ק\"ג)": round((weight + culture.get("משקל קטיף ראשוני (גרם)", 0)) / 1000, 2),
                     "ממוצע משקל לקופסא (גרם)": round(
