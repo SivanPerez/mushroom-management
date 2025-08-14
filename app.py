@@ -970,6 +970,7 @@ with tabs[8]:
             tdate = st.date_input("תאריך קטיף אחרון", value=date.today())
             weight = st.number_input("משקל קטיף אחרון (גרם)", min_value=0)
             if st.form_submit_button("סיום קטיף אחרון"):
+                culture = next(c for c in data if c["id"] == c_id)
                 c_id = options[selected]
                 update_record_by_id(c_id, {
                     "שלב": "קטיף אחרון",
