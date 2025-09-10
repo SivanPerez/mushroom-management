@@ -688,15 +688,18 @@ with tabs[2]:
                     "תאריך בקבוקים": bottle_date.strftime("%d/%m/%Y"),
                     "מספר בקבוקים": bottle_count
                 })
+                next_id = get_next_id(data)  # חישוב פעם אחת לפני הלולאה
 
                 for j in range(1, transfers + 1):
                     daughter = {
-                        "id": get_next_id(data),
+                        "id": next_id,
                         "שלב": "צלחות פטרי",
                         "תרבית": f"{plate['תרבית']}-{j}",
-                        "תאריך צלחת": date.today().strftime("%d/%m/%Y")
+                        "תאריך צלחת": date.today().strftime("%d/%m/%Y"),
                     }
                     add_record(daughter)
+                    data.append(daughter)   # חשוב לעדכן את הרשימה המקומית
+                    next_id += 1            # מגדילים ידנית ל-ID הבא
 
                 data = load_data()
 
