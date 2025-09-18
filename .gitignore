@@ -31,11 +31,12 @@ service_account.json
 
 # גיבויים ונתוני ריצה
 backups/
-cordyceps.json
+sample_data.json
 *.pdf
 
 # Streamlit secrets (אם נשמרים מקומית)
 .secrets.toml
+.streamlit/secrets.toml
 
 # קבצים מהדפדפן
 *.swp
