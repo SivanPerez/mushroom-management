@@ -178,57 +178,45 @@ def inject_base_css():
     </style>
     """, unsafe_allow_html=True)
 
-
 def inject_sidebar_layout_css():
-    """מזריק CSS פריסת סיידבר: גובה מלא, תיבה תחתונה (logout) צמודה לתחתית."""
+    import streamlit as st
     st.markdown("""
     <style>
-    /* גובה מלא לסיידבר + פריסת עמודה */
-    [data-testid="stSidebar"] > div:first-child {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
+      /* מחזיר את הסיידבר למצב ברירת המחדל של סטרימליט (שמאל) */
 
-    /* wrapper לכל התוכן */
-    [data-testid="stSidebar"] .sb-flex {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
+      /* אפס כל מיקום/טרנספורם/זי־אינדקס שהוגדרו בעבר */
+      [data-testid="stSidebar"] {
+        position: relative !important;
+        top: auto !important;
+        bottom: auto !important;
+        right: auto !important;
+        left: auto !important;
+        width: auto !important;
+        transform: none !important;
+        transition: none !important;
+        z-index: auto !important;
+        box-shadow: none !important;
+      }
 
-    /* בלוק תחתון צמוד לתחתית */
-    [data-testid="stSidebar"] .push-bottom.logout-box {
-        margin-top: auto;            
-        padding: 6px 6px 30px;       
-        border-top: 1px solid #e2e2e2;
+      /* כפתור הקולפס חוזר לשמאל */
+      [data-testid="stSidebarCollapseButton"] {
+        left: 0.5rem !important;
+        right: auto !important;
+      }
+
+      /* אל תשנהי מרווחים סביב התוכן הראשי */
+      [data-testid="stAppViewContainer"] > .main {
+        margin-left: auto !important;
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+      }
+
+      /* מאפשר להחזיק RTL לטקסט בלבד, בלי להזיז צדדים */
+      html, body, [data-testid="stAppViewContainer"], .main, .block-container {
         direction: rtl;
-    }
-
-    /* שורה קטנה: טקסט+כפתור */
-    .logout-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-
-    /* טקסט קטן ורך */
-    .logout-user {
-        font-size: 0.82rem;
-        color: #555;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    /* כפתור קטן יותר */
-    .logout-box .stButton > button {
-        font-size: 0.78rem !important;
-        padding: 2px 8px !important;
-        border-radius: 8px !important;
-        min-height: 26px !important;
-        line-height: 1.1 !important;
-    }
+        text-align: right;
+      }
+      /* תוכן הסיידבר מיושר לימין, אבל נשאר בשמאל המסך */
+      [data-testid="stSidebar"] * { text-align: right; }
     </style>
     """, unsafe_allow_html=True)
