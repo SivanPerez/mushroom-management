@@ -7,7 +7,8 @@ from dashboard import create_dashboard
 from db import add_record, update_record_by_id, next_id, load_data, append_inventory_movement
 from labels import create_labels_pdf, create_liquid_labels_pdf
 from types import SimpleNamespace
-from ui_helpers import UIContext
+from ui_helpers import UIContext, _show_stage_table
+
 
 # ===================== רנדררים =====================
 # ==== Adapters / Helpers ====
