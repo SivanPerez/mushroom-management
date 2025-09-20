@@ -854,11 +854,6 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
                 os.remove(filename)
 
 def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
-    import pandas as pd
-    from datetime import date
-    import streamlit as st
-    from db import load_data
-
     # ========= זיהוי מין =========
     species_en = (getattr(ctx, "species_en", "") or "").strip().lower()
     is_cordy = "cordy" in species_en  # קורדיספס נשאר בדיוק כמו שהיה
@@ -1521,7 +1516,6 @@ def build_renderers(data_all):
 
     return {
         "דשבורד": lambda ctx: render_dashboard_generic(ctx, data=data_all),
-
         # קריאה/תצוגה בלבד – מותר להעביר slice
         "צלחות פטרי": lambda ctx: render_plate_generic(ctx, data=stage("צלחות פטרי")),
         # מסכים שצריכים גם מקור וגם יעד – MUST data_all

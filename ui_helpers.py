@@ -70,3 +70,20 @@ def inject_rtl_safe_css():
       .stTabs [role="tablist"] { direction: rtl; }
     </style>
     """, unsafe_allow_html=True)
+
+def fix_safari_dataframe_text():
+    st.markdown("""
+    <style>
+    /* פועל רק בספארי */
+    @supports (-webkit-hyphens:none) {
+      .stDataFrame [role="gridcell"],
+      .stDataFrame [role="columnheader"]{
+        color: var(--text-color, #31333F) !important;
+        -webkit-text-fill-color: currentColor !important;
+        opacity: 1 !important;   /* יש מקרים שספארי מציג 0.99→0 */
+      }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+fix_safari_dataframe_text()
