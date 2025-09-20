@@ -1,13 +1,12 @@
 import streamlit as st
 from db import is_prod, _spreadsheet_name, load_data
-from ui_helpers import UIContext, inject_base_css, inject_sidebar_layout_css
 from renderers import build_renderers
 from config import species_order, species_labels_he, WORKFLOW
+from ui_helpers import UIContext, inject_rtl_safe_css
 
 #להשאיר למעלה
 st.set_page_config(page_title="ניהול גידול פטריות", layout="wide")
-inject_base_css()
-inject_sidebar_layout_css()
+inject_rtl_safe_css()  # מינימלי ובטוח
 
 _env = "PROD" if is_prod() else "DEV"
 st.caption(f"מצב עבודה: **{_env}** {_spreadsheet_name()}")

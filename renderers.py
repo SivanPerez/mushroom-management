@@ -3,11 +3,11 @@ import pandas as pd
 import streamlit as st
 from datetime import date, datetime, timedelta
 import datetime as dt
-from ui_helpers import UIContext, _show_stage_table
 from dashboard import create_dashboard
 from db import add_record, update_record_by_id, next_id, load_data, append_inventory_movement
 from labels import create_labels_pdf, create_liquid_labels_pdf
 from types import SimpleNamespace
+from ui_helpers import UIContext
 
 # ===================== רנדררים =====================
 # ==== Adapters / Helpers ====
@@ -144,7 +144,8 @@ def render_plate_generic(ctx, data=None, **kwargs):
 
         if submitted:
             if not (strain or "").strip():
-                msg.error("חסר שם תרבית.")
+                msg("חסר שם תרבית.") #                msg.error("חסר שם תרבית.")
+
             else:
                 ops = get_ops(ctx)
                 if not ops:
@@ -158,7 +159,8 @@ def render_plate_generic(ctx, data=None, **kwargs):
                     "מספר העברה": f"P{int(passage_num)}",
                 }
                 ops["add"](new_entry)
-                msg.success("הצלחת נוספה בהצלחה!")
+                msg("הצלחת נוספה בהצלחה!") #                msg.success("הצלחת נוספה בהצלחה!")
+
                 st.rerun()
 
     # --- טבלה: צלחות קיימות ---

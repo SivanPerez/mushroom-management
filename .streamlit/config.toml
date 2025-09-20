@@ -1,0 +1,8 @@
+# .streamlit/config.toml
+[theme]
+base = "light"
+primaryColor = "#6E1B27"              # הבורדו שלך
+backgroundColor = "#FFFFFF"           # רקע הדף
+secondaryBackgroundColor = "F5F5F5"  # צבע הקופסה בתמונה (בז' בהיר)
+textColor = "#31333F"                 # טקסט כהה נעים
+font = "sans serif"
