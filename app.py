@@ -1,5 +1,3 @@
-import streamlit as st
-
 from auth import simple_login
 from db import is_prod, _spreadsheet_name, load_data
 from renderers import build_renderers
@@ -7,9 +5,13 @@ from config import species_order, species_labels_he, WORKFLOW
 from ui_helpers import UIContext, inject_rtl_safe_css
 import os, streamlit as st
 
+
 #להשאיר למעלה
 st.set_page_config(page_title="ניהול גידול פטריות", layout="wide")
 inject_rtl_safe_css()  # מינימלי ובטוח
+
+if not simple_login():
+    st.stop()
 
 _env = "PROD" if is_prod() else "DEV"
 st.caption(f"מצב עבודה: **{_env}** {_spreadsheet_name()}")
@@ -89,5 +91,5 @@ data = load_data(species_en)
 data_all = load_data(species_en)
 RENDERERS = build_renderers(data_all)
 render_species(species_en, data_all)
-simple_login()
+
 

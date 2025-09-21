@@ -41,11 +41,3 @@ def simple_login() -> bool:
     else:
         st.session_state["show_logout"] = True
         return True
-
-# בדיקת התחברות — השאירי כפי שהוא
-if not simple_login():
-    st.stop()
-
-# בדיקת התחברות
-if not simple_login():
-    st.stop()
