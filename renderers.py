@@ -160,7 +160,7 @@ def render_plate_generic(ctx, data=None, **kwargs):
                     "מספר העברה": f"P{int(passage_num)}",
                 }
                 ops["add"](new_entry)
-                msg("הצלחת נוספה בהצלחה!") #                msg.success("הצלחת נוספה בהצלחה!")
+                st.success("הצלחת נוספה בהצלחה!")
 
                 st.rerun()
 
