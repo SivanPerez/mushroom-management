@@ -71,6 +71,7 @@ def inject_rtl_safe_css():
     </style>
     """, unsafe_allow_html=True)
 
+#תיקון בספארי
 def fix_safari_dataframe_text():
     st.markdown("""
     <style>

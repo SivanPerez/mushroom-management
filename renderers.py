@@ -4,7 +4,7 @@ import streamlit as st
 from datetime import date, datetime, timedelta
 import datetime as dt
 from dashboard import create_dashboard
-from db import add_record, update_record_by_id, next_id, load_data, append_inventory_movement
+from db import add_record, update_record_by_id, next_id, load_data, append_inventory_movement, _open_spreadsheet
 from labels import create_labels_pdf, create_liquid_labels_pdf
 from types import SimpleNamespace
 from ui_helpers import UIContext, _show_stage_table
@@ -854,6 +854,11 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
                 os.remove(filename)
 
 def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
+    import pandas as pd
+    from datetime import date
+    import streamlit as st
+    from db import load_data
+
     # ========= זיהוי מין =========
     species_en = (getattr(ctx, "species_en", "") or "").strip().lower()
     is_cordy = "cordy" in species_en  # קורדיספס נשאר בדיוק כמו שהיה
@@ -1335,17 +1340,29 @@ def render_freeze_dry_generic(ctx: UIContext, data=None, **kwargs):
     fmt = lambda d=None: (d or date.today()).strftime("%d/%m/%Y")
 
     # טוען שורות מלשונית ראשית או חלופית (Uppercase), מחזיר גם את שם הלשונית שממנה נקראו הנתונים
-    def sheet_rows(primary, alt_upper):
-        rows = load_data(primary) or []
-        if rows:
-            return rows, primary
-        rows2 = load_data(alt_upper) or []
-        return rows2, alt_upper
+
+    def sheet_rows(primary: str):
+        """טוען שורות מהטאב הראשי בלבד, בלי ליצור טאבים חדשים.
+           אם הטאב לא קיים – מחזיר ריק ושם הטאב המבוקש.
+        """
+        # נסה לקרוא נתונים; load_data ייצור טאב אם חסר – לא נרצה כאן.
+        # לכן קודם נבדוק קיום בלי יצירה.
+        sh = _open_spreadsheet()
+        try:
+            titles = [ws.title for ws in sh.worksheets()]  # לא יוצר טאבים
+        except Exception:
+            titles = []
+
+        if primary in titles:
+            return load_data(primary) or [], primary
+
+        # טאב לא קיים – לא ניצור, נחזיר ריק
+        return [], primary
 
     # ===== פתיחת ייבוש =====
     st.subheader("פתיחת ייבוש")
 
-    inv_rows, inv_sheet = sheet_rows("Inventory", "INVENTORY")
+    inv_rows, inv_sheet = sheet_rows("Inventory")
     if not inv_rows:
         st.error("גליון Inventory/INVENTORY ריק או ללא כותרות. הוסיפי כותרות ונתונים.")
         return
@@ -1516,6 +1533,7 @@ def build_renderers(data_all):
 
     return {
         "דשבורד": lambda ctx: render_dashboard_generic(ctx, data=data_all),
+
         # קריאה/תצוגה בלבד – מותר להעביר slice
         "צלחות פטרי": lambda ctx: render_plate_generic(ctx, data=stage("צלחות פטרי")),
         # מסכים שצריכים גם מקור וגם יעד – MUST data_all

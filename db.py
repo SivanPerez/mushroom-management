@@ -78,7 +78,7 @@ def _with_backoff(fn, *args, **kwargs):
 @st.cache_resource(show_spinner=False)
 def _authorize_client() -> gspread.Client:
     scope = [
-        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",  # ← עדכני
         "https://www.googleapis.com/auth/drive",
     ]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(_service_account_info(), scope)
@@ -262,3 +262,4 @@ def append_inventory_movement(species_en: str, stage: str,
         "הערה": note or "",
     }
     add_record("Inventory", rec)  # add_record כבר מנקה cache
+
