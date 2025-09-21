@@ -1,18 +1,11 @@
 import streamlit as st
+
+from auth import simple_login
 from db import is_prod, _spreadsheet_name, load_data
 from renderers import build_renderers
 from config import species_order, species_labels_he, WORKFLOW
 from ui_helpers import UIContext, inject_rtl_safe_css
 import os, streamlit as st
-st.caption(
-    "DEBUG → APP_ENV(secrets)=%s | ENV(secrets)=%s | APP_ENV(os)=%s | "
-    "auth_status=%s" % (
-        st.secrets.get("APP_ENV"),
-        st.secrets.get("ENV"),
-        os.getenv("APP_ENV"),
-        st.session_state.get("authentication_status"),
-    )
-)
 
 #להשאיר למעלה
 st.set_page_config(page_title="ניהול גידול פטריות", layout="wide")
@@ -96,4 +89,5 @@ data = load_data(species_en)
 data_all = load_data(species_en)
 RENDERERS = build_renderers(data_all)
 render_species(species_en, data_all)
+simple_login()
 
