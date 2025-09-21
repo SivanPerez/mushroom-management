@@ -3,6 +3,7 @@ from db import is_prod, _spreadsheet_name, load_data
 from renderers import build_renderers
 from config import species_order, species_labels_he, WORKFLOW
 from ui_helpers import UIContext, inject_rtl_safe_css
+import os, streamlit as st
 st.caption(
     "DEBUG → APP_ENV(secrets)=%s | ENV(secrets)=%s | APP_ENV(os)=%s | "
     "auth_status=%s" % (
