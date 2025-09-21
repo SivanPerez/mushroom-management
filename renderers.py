@@ -1341,24 +1341,18 @@ def render_freeze_dry_generic(ctx: UIContext, data=None, **kwargs):
 
     # טוען שורות מלשונית ראשית או חלופית (Uppercase), מחזיר גם את שם הלשונית שממנה נקראו הנתונים
 
-    def sheet_rows(primary: str):
-        """טוען שורות מהטאב הראשי בלבד, בלי ליצור טאבים חדשים.
-           אם הטאב לא קיים – מחזיר ריק ושם הטאב המבוקש.
-        """
-        # נסה לקרוא נתונים; load_data ייצור טאב אם חסר – לא נרצה כאן.
-        # לכן קודם נבדוק קיום בלי יצירה.
+    def sheet_rows(*names: str):
         sh = _open_spreadsheet()
         try:
-            titles = [ws.title for ws in sh.worksheets()]  # לא יוצר טאבים
+            existing = {ws.title for ws in sh.worksheets()}  # בדיקת קיום בלבד
         except Exception:
-            titles = []
+            existing = set()
 
-        if primary in titles:
-            return load_data(primary) or [], primary
+        for name in names:
+            if name in existing:
+                return (load_data_safe(name) or []), name
 
-        # טאב לא קיים – לא ניצור, נחזיר ריק
-        return [], primary
-
+        return [], (names[0] if names else "")
     # ===== פתיחת ייבוש =====
     st.subheader("פתיחת ייבוש")
 
