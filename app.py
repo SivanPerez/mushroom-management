@@ -13,8 +13,11 @@ inject_rtl_safe_css()  # מינימלי ובטוח
 if not simple_login():
     st.stop()
 
-_env = "PROD" if is_prod() else "DEV"
-st.caption(f"מצב עבודה: **{_env}** {_spreadsheet_name()}")
+from db import is_prod, _spreadsheet_name
+
+# מציגים את הבאנר רק בדב
+if not is_prod():  # DEV / development / local
+    st.caption(f"🛠️ מצב עבודה: **DEV** {_spreadsheet_name()}")
 
 qp = st.query_params
 if "species" in qp:
