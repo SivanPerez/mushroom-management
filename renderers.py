@@ -196,6 +196,33 @@ def render_plate_generic(ctx, data=None, **kwargs):
         st.info("אין צלחות פטרי במלאי כרגע.")
 
 def render_liquid_generic(ctx, data=None, **kwargs):
+       # ===== בקבוקים במלאי =====
+    liquid_stage = [
+        c for c in data
+        if (c.get("שלב") or "").strip() == "בקבוקי תרבית נוזלית"
+           and int(c.get("מספר בקבוקים", 0) or 0) > 0
+    ]
+
+    if liquid_stage:
+        st.subheader("בקבוקים במלאי")
+
+        # טבלת שורות מלאה (פר תרבית/אצווה)
+        df = (
+            pd.DataFrame(liquid_stage)
+            .replace("", pd.NA)
+            .dropna(axis=1, how="all")
+        )
+
+        # מציג עמודות עיקריות אם קיימות
+        preferred_cols = ["id", "תרבית", "תאריך בקבוקים", "מספר בקבוקים", "מספר העברות לצלחת פטרי"]
+        cols_to_show = [c for c in preferred_cols if c in df.columns] or df.columns.tolist()
+        st.dataframe(df[cols_to_show].sort_values(by=cols_to_show[2] if len(cols_to_show) > 2 else cols_to_show[0],
+                                                  ascending=False),
+                     use_container_width=True)
+
+    else:
+        st.info("אין בקבוקים זמינים במלאי בשלב תרבית נוזלית.")
+
     if data is None:
         data = load_data(ctx.species_en)
 
@@ -265,12 +292,6 @@ def render_liquid_generic(ctx, data=None, **kwargs):
     else:
         st.info("אין צלחות זמינות ליצירת בקבוקים.")
 
-        # ===== בקבוקים במלאי =====
-        liquid_stage = [c for c in data if c.get("שלב") == "בקבוקי תרבית נוזלית"]
-        if liquid_stage:
-            st.subheader("בקבוקים במלאי")
-            df = pd.DataFrame(liquid_stage).replace("", pd.NA).dropna(axis=1, how="all")
-            st.dataframe(df, use_container_width=True)
 
     # ===== הדפסת מדבקות לבקבוקים =====
     st.header("הדפסת מדבקות – תרבית נוזלית")
