@@ -65,7 +65,7 @@ def create_single_label_page(c, culture, page_size):
         ("תאריך אנדרלייט צפוי", underlight_date, True, False),
         ("תרבית", culture.get("תרבית", ""), True, True),
         ("מצע", culture.get("מצע", ""), True, True),
-        ("משך קיטור בשעות", culture.get("משך קיטור בשעות", ""), True, False),
+        ("משך קיטור בשעות", culture.get("קיטור xx(yy)", ""), True, False),
         ("בקבוקים", str(culture.get("מספר בקבוקים", "")), True, False),
         ("קופסאות", str(culture.get("מספר קופסאות", "")), True, False),
     ]
