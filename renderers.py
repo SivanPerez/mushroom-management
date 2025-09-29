@@ -770,132 +770,103 @@ def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
     _show_stage_table(data, "אנדרלייט", "תרביות בשלב אנדרלייט")
 
 def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **kwargs):
-    # --- טבלת בלוקים ---
+
+    # 1) טען נתונים ו־ops לפני השימוש
+    ops = get_ops(ctx)
+    if not ops:
+        return
+    from db import load_data
+    if data is None:
+        data = load_data(ctx.species_en)
+
+    st.header("אינקובציה בלוקים")
+
+    # 2) חישוב הבלוקים אחרי שטענו data
     blocks_rows = [c for c in data if (c.get("שלב") or "").strip() == "אינקובציה בלוקים"]
     if blocks_rows:
         st.subheader("בלוקים באינקובציה")
-        df = (pd.DataFrame(blocks_rows)
-              .replace("", pd.NA)
-              .dropna(axis=1, how="all"))
-        cols_order = ["id", "תרבית", "תאריך בלוקים", "מספר בלוקים",
-                      "מצע", "משקל בלוק", "משך קיטור בשעות", "גריין בשימוש"]
-        df = df[[c for c in cols_order if c in df.columns] +
-                [c for c in df.columns if c not in cols_order]]
+        df = (pd.DataFrame(blocks_rows).replace("", pd.NA).dropna(axis=1, how="all"))
+        cols_order = ["id","תרבית","תאריך בלוקים","מספר בלוקים","מצע","משקל בלוק","משך קיטור בשעות","גריין בשימוש"]
+        df = df[[c for c in cols_order if c in df.columns] + [c for c in df.columns if c not in cols_order]]
         if "id" in df.columns:
             df = df.sort_values(by="id", ascending=False)
         st.dataframe(df, use_container_width=True)
     else:
         st.info("אין כרגע בלוקים בשלב אינקובציה.")
 
-    ops = get_ops(ctx)
-    if not ops:
-        return
-
-    st.header("אינקובציה בלוקים")
-
-    # --- טעינת נתונים ---
-    from db import load_data
-    if data is None:
-        data = load_data(ctx.species_en)
-
-    # --- מקורות זמינים: G2G עם "כמות גריין חדש" > 0 ---
+    # --- מקורות זמינים ליצירת בלוקים (G2G) ---
     g2g_sources = [
         c for c in data
-        if (c.get("שלב") or "").strip() == "G2G" and int(c.get("כמות גריין חדש", 0) or 0) > 0 and "id" in c
+        if (c.get("שלב") or "").strip() == "G2G"
+        and int(c.get("כמות גריין חדש", 0) or 0) > 0
+        and "id" in c
     ]
 
+    # 3) אל תחזור מהפונקציה — רק דלג על הטופס אם אין מקורות
+    st.subheader("יצירת בלוקים")
     if not g2g_sources:
         st.info("אין גריין זמין מהשלב G2G לבלוקים.")
-        return
+    else:
+        options = {f"#{c['id']} {c.get('תרבית','?')} — זמין: {int(c.get('כמות גריין חדש',0) or 0)}": c["id"] for c in g2g_sources}
+        selected_label = st.selectbox("בחר מקור G2G", list(options.keys()))
+        state_key = f"last_selected_blocks_{ctx.species_en}"
+        if st.session_state.get(state_key) != selected_label:
+            st.session_state[state_key] = selected_label
+            st.rerun()
 
-    st.subheader("יצירת בלוקים")
+        src_id = options[selected_label]
+        src = next((p for p in data if p["id"] == src_id), {})
+        available_grain = int(src.get("כמות גריין חדש", 0) or 0)
 
-    # --- בחירת מצע (עם "אחר" טקסט חופשי) ---
-    substrate_value = st.selectbox("סוג מצע", ["מאסטר מיקס", "סובין סויה", "עץ", "אחר"])
-    if substrate_value == "אחר":
-        substrate_value = st.text_input("ציין סוג מצע אחר").strip()
+        with st.form(key=f"add_blocks_{ctx.species_en}", clear_on_submit=True):
+            block_date = st.date_input("תאריך אכלוס", value=date.today())
+            used_grain  = int(st.number_input("כמות גריין מקור", min_value=1, max_value=max(1, available_grain),
+                                              value=min(available_grain, 30) if available_grain > 0 else 1, step=1))
+            block_count = int(st.number_input("כמות בלוקים", min_value=1, value=300, step=1))
+            substrate_value    = st.selectbox("סוג מצע", ["מאסטר מיקס", "סובין סויה", "עץ", "אחר"])
+            if substrate_value == "אחר":
+                substrate_value = st.text_input("ציין סוג מצע אחר").strip()
+            sterilization_value = st.text_input("קיטור xx(yy)").strip()
+            block_weight_value  = st.selectbox("משקל בלוק", ["2 Kg", "2.5 Kg", "אחר"])
+            if block_weight_value == "אחר":
+                block_weight_value = st.text_input("ציין משקל בלוק אחר").strip()
 
-    # --- משך קיטור (כיתוב חופשי, כמו 'xx(yy)') ---
-    sterilization_value = st.text_input("קיטור xx(yy)").strip()
+            if st.form_submit_button("צור בלוקים"):
+                if used_grain > available_grain:
+                    st.error("אין מספיק גריין מאוכלס במקור.")
+                else:
+                    ops["update"](src_id, {"כמות גריין חדש": available_grain - used_grain})
+                    new_row = {
+                        "id": ops["next_id"](),
+                        "שלב": "אינקובציה בלוקים",
+                        "תרבית": src.get("תרבית"),
+                        "תאריך בלוקים": block_date.strftime("%d/%m/%Y"),
+                        "מצע": substrate_value or "לא צוין",
+                        "משך קיטור בשעות": sterilization_value or "לא צוין",
+                        "משקל בלוק": block_weight_value or "לא צוין",
+                        "מספר בלוקים": block_count,
+                        "גריין בשימוש": used_grain,
+                    }
+                    for key in ("מספר העברה","תאריך G2G","תאריך בקבוקים","תאריך צלחת"):
+                        if src.get(key):
+                            new_row[key] = src[key]
+                    ops["add"](new_row)
+                    st.success(f"נוצרו בלוקים! השתמשת ב-{used_grain} גריין והכנת {block_count} בלוקים.")
+                    st.rerun()
 
-    # --- משקל בלוק (עם "אחר" טקסט חופשי) ---
-    block_weight_value = st.selectbox("משקל בלוק", ["2 Kg", "2.5 Kg", "אחר"])
-    if block_weight_value == "אחר":
-        block_weight_value = st.text_input("ציין משקל בלוק אחר").strip()
-
-    # --- בחירת מקור G2G ---
-    options = {
-        f"#{c['id']} {c.get('תרבית','?')} — זמין: {int(c.get('כמות גריין חדש',0) or 0)}": c["id"]
-        for c in g2g_sources
-    }
-    selected_label = st.selectbox("בחר מקור G2G", list(options.keys()))
-
-    # זיכרון בחירה אחרונה למניעת שינוי תדיר ב-UI
-    state_key = f"last_selected_blocks_{ctx.species_en}"
-    if st.session_state.get(state_key) != selected_label:
-        st.session_state[state_key] = selected_label
-        st.rerun()
-
-    src_id = options[selected_label]
-    src = next((p for p in data if p["id"] == src_id), {})
-    available_grain = int(src.get("כמות גריין חדש", 0) or 0)
-
-    # --- טופס יצירת בלוקים ---
-    form_key = f"add_blocks_{ctx.species_en}"
-    with st.form(key=form_key, clear_on_submit=True):
-        block_date = st.date_input("תאריך אכלוס", value=date.today())
-        used_grain = int(st.number_input(
-            "כמות גריין מקור",
-            min_value=1,
-            max_value=max(1, available_grain),
-            value=min(available_grain, 30) if available_grain > 0 else 1,
-            step=1
-        ))
-        block_count = int(st.number_input("כמות בלוקים", min_value=1, value=300, step=1))
-
-        submitted = st.form_submit_button("צור בלוקים")
-        if submitted:
-            if used_grain > available_grain:
-                st.error("אין מספיק גריין מאוכלס במקור.")
-            else:
-                # 1) הפחתה מן המקור G2G
-                ops["update"](src_id, {"כמות גריין חדש": available_grain - used_grain})
-
-                # 2) יצירת רשומת בלוקים חדשה
-                new_row = {
-                    "id": ops["next_id"](),
-                    "שלב": "אינקובציה בלוקים",
-                    "תרבית": src.get("תרבית"),
-                    "תאריך בלוקים": block_date.strftime("%d/%m/%Y"),
-                    "מצע": substrate_value or "לא צוין",
-                    "משך קיטור בשעות": sterilization_value or "לא צוין",
-                    "משקל בלוק": block_weight_value or "לא צוין",
-                    "מספר בלוקים": block_count,
-                    "גריין בשימוש": used_grain,  # למעקב
-                }
-
-                # העברת מטא-דאטה שימושי אם קיים
-                for key in ("מספר העברה", "תאריך G2G", "תאריך בקבוקים", "תאריך צלחת"):
-                    if src.get(key):
-                        new_row[key] = src[key]
-
-                ops["add"](new_row)
-                st.success(f"נוצרו בלוקים! השתמשת ב-{used_grain} גריין והכנת {block_count} בלוקים.")
-                st.rerun()
-
-    # --- מדבקות לבלוקים ---
+    # --- הדפסת מדבקות (מוצג תמיד לפי הבלוקים שבאינקובציה) ---
     if show_labels:
         st.subheader("הדפסת מדבקות (בלוקים)")
         if not blocks_rows:
             st.info("אין בלוקים ליצירת מדבקות.")
         else:
-            opts = {f"#{c['id']} {c.get('תרבית', '?')}": c["id"] for c in blocks_rows}
+            opts = {f"#{c['id']} {c.get('תרבית','?')}": c["id"] for c in blocks_rows}
             sel_keys = st.multiselect("בחר בלוקים להדפסה", list(opts.keys()))
             selected_ids = [opts[k] for k in sel_keys]
             selected_blocks = [c for c in blocks_rows if c["id"] in selected_ids]
             if selected_blocks and st.button("צור מדבקות"):
                 filename = f"{datetime.today().strftime('%Y-%m-%d')}_Blocks_Labels.pdf"
-                create_labels_pdf(selected_blocks, filename)  # ↓ הפונקציה למטה
+                create_labels_pdf(selected_blocks, filename)
                 with open(filename, "rb") as f:
                     st.download_button("הורדה", data=f, file_name=filename, mime="application/pdf")
                 os.remove(filename)
