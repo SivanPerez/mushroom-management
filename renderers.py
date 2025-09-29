@@ -700,7 +700,6 @@ def render_g2g_generic(ctx: UIContext, data=None, **kwargs):
                 )
 
 def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
-    from datetime import date
 
     st.header("העברה לשלב אנדרלייט")
     if data is None:
@@ -1187,7 +1186,7 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
     st.header("קטיף")
 
     # שלבים מהם מותר לקטוף
-    ELIGIBLE_STAGES = ("אינקולציה בלוקים", "מיון", "קטיף")
+    ELIGIBLE_STAGES = ("אנדרלייט", "מיון", "קטיף")
 
     # רשומות מותרות לקטיף: בשלב מתאים, לא סגורות, ויש להן id
     candidates = [
