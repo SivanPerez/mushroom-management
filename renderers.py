@@ -700,35 +700,63 @@ def render_g2g_generic(ctx: UIContext, data=None, **kwargs):
                 )
 
 def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
+    from datetime import date
+
     st.header("העברה לשלב אנדרלייט")
     if data is None:
         data = load_data(ctx.species_en)
+
     ops = get_ops(ctx)
     if not ops:
         st.stop()
     update = ops["update"]
 
-    # רק תרביות משלב אינקובציה
-    incubating = [c for c in data if str(c.get("שלב", "")).strip() == "אינקובציה"]
+    # --- אפשרויות מיקום לפי מין (כמו שנתתי קודם) ---
+    species = getattr(ctx, "species_en", "unknown")
+    def underlight_locations(sp: str):
+        mapping = {
+            "Hericium":   ["חדר 9", "חממה", "אחר"],
+            "Reishi":     ["חדר 11", "חממה", "אחר"],
+            "TurkeyTail": ["חדר 11", "חממה", "אחר"],
+            "Shiitake":   ["חממה", "אחר"],
+            "Maitake":    ["חדר 10", "חממה", "אחר"],
+            "Cordyceps":  ["חדר 4", "חדר 5", "חדר 7", "אחר"],
+        }
+        return mapping.get(sp, ["חממה", "אחר"])
+    loc_options = underlight_locations(species)
 
-    if incubating:
-        options = {f"#{c['id']} {c.get('תרבית','-')}": c["id"] for c in incubating if "id" in c}
+    # --- שלבי מקור לפי מין ---
+    def source_stages(sp: str):
+        if sp == "Cordyceps":
+            return {"אינקובציה"}  # כמו שהיה
+        # כל השאר:
+        return {"אינקולציה בלוקים", "מיון"}
+
+    stages = source_stages(species)
+
+    # בוחרים רק תרביות שבשלבים הרלוונטיים
+    candidates = [c for c in data if str(c.get("שלב", "")).strip() in stages]
+
+    if candidates:
+        options = {
+            f"#{c['id']} {c.get('תרבית','-')}  ·  ({c.get('שלב','-')})": c["id"]
+            for c in candidates if "id" in c
+        }
 
         with st.form("move_to_underlight", clear_on_submit=True):
             selected = st.selectbox("בחר תרבית", list(options.keys()))
             ul_date  = st.date_input("תאריך אנדרלייט", value=date.today())
-            loc_sel  = st.selectbox("מיקום אנדרלייט", ["חדר 4", "חדר 5", "חדר 7", "אחר"])
+            loc_sel  = st.selectbox("מיקום אנדרלייט", loc_options)
             loc_txt  = st.text_input("ציין מיקום") if loc_sel == "אחר" else ""
             submit   = st.form_submit_button("סיום העברה")
 
         if submit:
             location = (loc_txt or loc_sel).strip()
             if loc_sel == "אחר" and not location:
-                st.error("בחרת 'אחר' — אנא צייני מיקום.")
+                st.error("בחרת 'אחר' — אנא ציין מיקום.")
                 return
 
             c_id = options[selected]
-            # כתיבה ל־DB
             update(c_id, {
                 "שלב": "אנדרלייט",
                 "תאריך אנדרלייט": ul_date.strftime("%d/%m/%Y"),
@@ -738,9 +766,8 @@ def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
             st.success(f"תרבית #{c_id} הועברה לאנדרלייט ({location}).")
             st.rerun()
     else:
-        st.info("אין תרביות אינקובציה זמינות להעברה לשלב אנדרלייט.")
+        st.info("אין תרביות זמינות להעברה לאנדרלייט מהשלבים המתאימים.")
 
-    # טבלת מצב נוכחי
     _show_stage_table(data, "אנדרלייט", "תרביות בשלב אנדרלייט")
 
 def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **kwargs):
