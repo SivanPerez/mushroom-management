@@ -1501,11 +1501,12 @@ def render_freeze_dry_generic(ctx: UIContext, data=None, **kwargs):
             st.dataframe(df, use_container_width=True)
 
 def render_inventory_generic(ctx, inv_data=None, **kwargs):
-    st.header("מלאי קורדיספס")
     if inv_data is None:
         inv_data = load_data("Inventory") or []
     species = getattr(ctx, "species_en", "unknown")
+    species_he = species_labels_he.get(species, species)  # תווית עברית, נפילה חכמה לשם המקורי
 
+    st.header(f"מלאי {species_he}")
     def norm(s):
         return str(s or "").replace("\u00a0", " ").strip().lower()
 
