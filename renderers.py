@@ -1289,14 +1289,14 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
             st.success(f"נשמר קטיף: #{picked_id} | {flash_choice} | {w} גרם (סה\"כ: {new_total} גרם).")
             st.rerun()
     else:
-        st.info("אין תרביות זמינות לקטיף (אינקולציה בלוקים / מיון / קטיף).")
+        st.info("אין תרביות זמינות לקטיף (אנדרלייט / מיון / קטיף).")
 
     st.divider()
 
     # ===== כפתור נפרד: סגירת מחזור קטיף (בלתי הפיך) =====
     closable = [
         c for c in data
-        if (c.get("שלב") or "").strip() in ("קטיף", "מיון", "אינקולציה בלוקים")
+        if (c.get("שלב") or "").strip() in ("קטיף", "מיון", "אנדרלייט")
            and not (str(c.get("קטיף סגור", "")).strip().upper() in ("TRUE", "1", "YES"))
            and "id" in c
     ]
@@ -1350,7 +1350,7 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
     # פתוחות לקטיף (לא סגור)
     open_rows = [
         c for c in data
-        if (c.get("שלב") or "").strip() in ("אינקולציה בלוקים", "מיון", "קטיף")
+        if (c.get("שלב") or "").strip() in ("אנדרלייט", "מיון", "קטיף")
         and not (str(c.get("קטיף סגור", "")).strip().upper() in ("TRUE", "1", "YES"))
     ]
     if open_rows:
