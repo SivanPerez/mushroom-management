@@ -47,39 +47,60 @@ def create_labels_pdf(selected_cultures, filename):
     c.save()
 def create_single_label_page(c, culture, page_size):
     ensure_fonts()
-    """מייצר עמוד בודד של מדבקה (בשימוש בפונקציה הראשית)."""
+    # מסגרת
     c.setStrokeColor(colors.black)
     c.setLineWidth(2)
     c.rect(0, 0, page_size[0], page_size[1])
 
-    incubation_date = culture.get("תאריך אינקובציה", "")
-    try:
-        base = datetime.strptime(incubation_date, "%d/%m/%Y")
-        underlight_date = (base + timedelta(days=8)).strftime("%d/%m/%Y")
-    except Exception:
-        underlight_date = ""
+    # זיהוי מדבקת בלוקים
+    stage = str(culture.get("שלב", "")).strip()
+    is_blocks = (
+        stage == "אינקובציה בלוקים"
+        or ("תאריך בלוקים" in culture)
+        or ("מספר בלוקים" in culture)
+    )
 
-    rows = [
-        ("ID", str(culture.get("id", "")), False, False),
-        ("תאריך אינקובציה", incubation_date, True, False),
-        ("תאריך אנדרלייט צפוי", underlight_date, True, False),
-        ("תרבית", culture.get("תרבית", ""), True, True),
-        ("מצע", culture.get("מצע", ""), True, True),
-        ("משך קיטור בשעות", culture.get("קיטור xx(yy)", ""), True, False),
-        ("בקבוקים", str(culture.get("מספר בקבוקים", "")), True, False),
-        ("קופסאות", str(culture.get("מספר קופסאות", "")), True, False),
-    ]
+    if is_blocks:
+        # ----- תבנית בלוקים (מה שביקשת) -----
+        inoc_date = culture.get("תאריך אינקובציה") or culture.get("תאריך בלוקים") or ""
+        rows = [
+            ("ID", str(culture.get("id", "")), False, False),
+            ("תרבית", culture.get("תרבית", ""), True, False),
+            ("תאריך אינקולציה", inoc_date, True, False),
+            ("כמות בלוקים", str(culture.get("מספר בלוקים", "")), True, False),
+            ("תאריך הפרחה", "__________", True, False),
+            ("תאריך פלאש ראשון", "__________", True, False),
+        ]
+    else:
+        # ----- התבנית הקיימת (לשימושים אחרים כפי שהיה) -----
+        incubation_date = culture.get("תאריך אינקובציה", "")
+        try:
+            base = datetime.strptime(incubation_date, "%d/%m/%Y")
+            underlight_date = (base + timedelta(days=8)).strftime("%d/%m/%Y")
+        except Exception:
+            underlight_date = ""
+        rows = [
+            ("ID", str(culture.get("id", "")), False, False),
+            ("תאריך אינקובציה", incubation_date, True, False),
+            ("תאריך אנדרלייט צפוי", underlight_date, True, False),
+            ("תרבית", culture.get("תרבית", ""), True, True),
+            ("מצע", culture.get("מצע", ""), True, True),
+            ("משך קיטור בשעות", culture.get("קיטור xx(yy)", ""), True, False),
+            ("בקבוקים", str(culture.get("מספר בקבוקים", "")), True, False),
+            ("קופסאות", str(culture.get("מספר קופסאות", "")), True, False),
+        ]
 
+    # כותרת ID גדולה
     c.setFont("NotoSansHebrew", 24)
     c.drawCentredString(page_size[0]/2, page_size[1]-40, f"ID: {rows[0][1]}")
 
+    # גוף המדבקה
     c.setFont("NotoSansHebrew", 18)
     y_text = page_size[1] - 90
     for title, value, flip_title, flip_value in rows[1:]:
-        title_fixed = reverse_hebrew_text(title, flip_title)
-        value_fixed = reverse_hebrew_text(value, flip_value)
-        line = f"{value_fixed}: {title_fixed}"
-        c.drawCentredString(page_size[0]/2, y_text, line)
+        title_fixed = reverse_hebrew_text(str(title), flip_title)
+        value_fixed = reverse_hebrew_text(str(value), flip_value)
+        c.drawCentredString(page_size[0]/2, y_text, f"{value_fixed}: {title_fixed}")
         y_text -= 30
 
 def reverse_hebrew_text(text, flip=True):

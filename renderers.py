@@ -770,6 +770,22 @@ def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
     _show_stage_table(data, "אנדרלייט", "תרביות בשלב אנדרלייט")
 
 def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **kwargs):
+    # --- טבלת בלוקים ---
+    blocks_rows = [c for c in data if (c.get("שלב") or "").strip() == "אינקובציה בלוקים"]
+    if blocks_rows:
+        st.subheader("בלוקים באינקובציה")
+        df = (pd.DataFrame(blocks_rows)
+              .replace("", pd.NA)
+              .dropna(axis=1, how="all"))
+        cols_order = ["id", "תרבית", "תאריך בלוקים", "מספר בלוקים",
+                      "מצע", "משקל בלוק", "משך קיטור בשעות", "גריין בשימוש"]
+        df = df[[c for c in cols_order if c in df.columns] +
+                [c for c in df.columns if c not in cols_order]]
+        if "id" in df.columns:
+            df = df.sort_values(by="id", ascending=False)
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("אין כרגע בלוקים בשלב אינקובציה.")
 
     ops = get_ops(ctx)
     if not ops:
@@ -867,38 +883,23 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
                 st.success(f"נוצרו בלוקים! השתמשת ב-{used_grain} גריין והכנת {block_count} בלוקים.")
                 st.rerun()
 
-    # --- טבלת בלוקים ---
-    blocks_rows = [c for c in data if (c.get("שלב") or "").strip() == "אינקובציה בלוקים"]
-    if blocks_rows:
-        st.subheader("בלוקים במלאי")
-        try:
-            df = pd.DataFrame(blocks_rows).replace("", pd.NA).dropna(axis=1, how="all")
-            st.dataframe(df, use_container_width=True)
-        except Exception:
-            for row in blocks_rows:
-                st.write(
-                    f"#{row.get('id','-')} | {row.get('תרבית','?')} | משקל: {row.get('משקל בלוק','-')} | "
-                    f"מספר בלוקים: {row.get('מספר בלוקים','-')} | תאריך: {row.get('תאריך בלוקים','-')} | "
-                    f"מצע: {row.get('מצע','-')} | מקור G2G: {row.get('מקור G2G','-')}"
-                )
-
-    # --- (אופציונלי) מדבקות לבלוקים ---
+    # --- מדבקות לבלוקים ---
     if show_labels:
         st.subheader("הדפסת מדבקות (בלוקים)")
         if not blocks_rows:
             st.info("אין בלוקים ליצירת מדבקות.")
         else:
-            opts = {f"#{c['id']} {c.get('תרבית','?')}": c["id"] for c in blocks_rows}
+            opts = {f"#{c['id']} {c.get('תרבית', '?')}": c["id"] for c in blocks_rows}
             sel_keys = st.multiselect("בחר בלוקים להדפסה", list(opts.keys()))
             selected_ids = [opts[k] for k in sel_keys]
             selected_blocks = [c for c in blocks_rows if c["id"] in selected_ids]
             if selected_blocks and st.button("צור מדבקות"):
-                today_str = datetime.today().strftime("%Y-%m-%d")
-                filename = f"{today_str}_Blocks_Labels.pdf"
-                create_labels_pdf(selected_blocks, filename)
+                filename = f"{datetime.today().strftime('%Y-%m-%d')}_Blocks_Labels.pdf"
+                create_labels_pdf(selected_blocks, filename)  # ↓ הפונקציה למטה
                 with open(filename, "rb") as f:
                     st.download_button("הורדה", data=f, file_name=filename, mime="application/pdf")
                 os.remove(filename)
+
 
 def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
     import pandas as pd
