@@ -729,7 +729,7 @@ def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
         if sp == "Cordyceps":
             return {"אינקובציה"}  # כמו שהיה
         # כל השאר:
-        return {"אינקולציה בלוקים", "מיון"}
+        return {"אינקובציה בלוקים", "מיון"}
 
     stages = source_stages(species)
 
@@ -775,7 +775,7 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
     if not ops:
         return
 
-    st.header("אינקולציה בלוקים")
+    st.header("אינקובציה בלוקים")
 
     # --- טעינת נתונים ---
     from db import load_data
@@ -848,7 +848,7 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
                 # 2) יצירת רשומת בלוקים חדשה
                 new_row = {
                     "id": ops["next_id"](),
-                    "שלב": "אינקולציה בלוקים",
+                    "שלב": "אינקובציה בלוקים",
                     "תרבית": src.get("תרבית"),
                     "תאריך בלוקים": block_date.strftime("%d/%m/%Y"),
                     "מצע": substrate_value or "לא צוין",
@@ -868,7 +868,7 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
                 st.rerun()
 
     # --- טבלת בלוקים ---
-    blocks_rows = [c for c in data if (c.get("שלב") or "").strip() == "אינקולציה בלוקים"]
+    blocks_rows = [c for c in data if (c.get("שלב") or "").strip() == "אינקובציה בלוקים"]
     if blocks_rows:
         st.subheader("בלוקים במלאי")
         try:
@@ -979,8 +979,8 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
         st.stop()
     update = ops["update"]
 
-    # מועמדים למיון: אינקולציה בלוקים / מיון / קטיף
-    ELIGIBLE_STAGES = ("אינקולציה בלוקים", "מיון", "קטיף")
+    # מועמדים למיון: אינקובציה בלוקים / מיון / קטיף
+    ELIGIBLE_STAGES = ("אינקובציה בלוקים", "מיון", "קטיף")
     candidates = [
         c for c in data
         if (c.get("שלב") or "").strip() in ELIGIBLE_STAGES and "id" in c
@@ -1024,8 +1024,8 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
 
             if st.form_submit_button("סיום מיון"):
                 current_stage = (picked.get("שלב") or "").strip()
-                # אם מגיעים מאינקולציה בלוקים — נעביר ל"מיון", אחרת נשאיר את השלב
-                new_stage = "מיון" if current_stage == "אינקולציה בלוקים" else current_stage
+                # אם מגיעים מאינקובציה בלוקים — נעביר ל"מיון", אחרת נשאיר את השלב
+                new_stage = "מיון" if current_stage == "אינקובציה בלוקים" else current_stage
 
                 new_total_damaged = current_damaged + int(delta_damaged)
 
@@ -1042,7 +1042,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
                 st.success(f"עודכן בהצלחה. פגומים: {current_damaged} + {int(delta_damaged)} = {new_total_damaged}")
                 st.rerun()
     else:
-        st.info("אין תרביות זמינות למיון (אינקולציה בלוקים / מיון / קטיף).")
+        st.info("אין תרביות זמינות למיון (אינקובציה בלוקים / מיון / קטיף).")
 
     # טבלת תרביות בשלב מיון (למינים שאינם קורדיספס)
     dfc = pd.DataFrame([c for c in data if (c.get("שלב") or "").strip() == "מיון"])
@@ -1264,7 +1264,7 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
 
             # קידום שלב: אם עדיין לא ב"קטיף" – נעבור ל"קטיף"
             current_stage = (picked.get("שלב") or "").strip()
-            new_stage = "קטיף" if current_stage in ("אינקולציה בלוקים", "מיון") else current_stage
+            new_stage = "קטיף" if current_stage in ("אינקובציה בלוקים", "מיון") else current_stage
 
             payload = {
                 "שלב": new_stage,
@@ -1590,7 +1590,7 @@ def build_renderers(data_all):
         "תרבית נוזלית": lambda ctx: render_liquid_generic(ctx, data=data_all),
         "P2G": lambda ctx: render_p2g_generic(ctx, data=data_all),
         "G2G": lambda ctx: render_g2g_generic(ctx, data=data_all),
-        "אינקולציה בלוקים": lambda ctx: render_block_generic(ctx, data=data_all),
+        "אינקובציה בלוקים": lambda ctx: render_block_generic(ctx, data=data_all),
         "אינקובציה": lambda ctx: render_incubation_generic(ctx, data=data_all, show_labels=True),
         "אנדרלייט": lambda ctx: render_underlight_generic(ctx, data=data_all),
         "מיון": lambda ctx: render_sorting_generic(ctx, data=data_all),
