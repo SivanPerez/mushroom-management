@@ -952,7 +952,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
     update = ops["update"]
 
     # מועמדים למיון: אינקובציה בלוקים / מיון / קטיף
-    ELIGIBLE_STAGES = ("אינקובציה בלוקים", "מיון", "קטיף")
+    ELIGIBLE_STAGES = ("אינקובציה בלוקים","אנדרלייט", "מיון", "קטיף")
     candidates = [
         c for c in data
         if (c.get("שלב") or "").strip() in ELIGIBLE_STAGES and "id" in c
@@ -1014,7 +1014,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
                 st.success(f"עודכן בהצלחה. פגומים: {current_damaged} + {int(delta_damaged)} = {new_total_damaged}")
                 st.rerun()
     else:
-        st.info("אין תרביות זמינות למיון (אינקובציה בלוקים / מיון / קטיף).")
+        st.info("אין תרביות זמינות למיון (אינקובציה בלוקים /אנדרלייט / מיון / קטיף).")
 
     # טבלת תרביות בשלב מיון (למינים שאינם קורדיספס)
     dfc = pd.DataFrame([c for c in data if (c.get("שלב") or "").strip() == "מיון"])
