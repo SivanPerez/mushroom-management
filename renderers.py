@@ -873,10 +873,7 @@ def render_block_generic(ctx: UIContext, show_labels: bool = True, data=None, **
 
 
 def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
-    import pandas as pd
-    from datetime import date
-    import streamlit as st
-    from db import load_data
+
 
     # ========= זיהוי מין =========
     species_en = (getattr(ctx, "species_en", "") or "").strip().lower()
@@ -952,7 +949,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
     update = ops["update"]
 
     # מועמדים למיון: אינקובציה בלוקים / מיון / קטיף
-    ELIGIBLE_STAGES = ("אינקובציה בלוקים","אנדרלייט", "מיון", "קטיף")
+    ELIGIBLE_STAGES = ("אנדרלייט", "אינקובציה בלוקים", "מיון", "קטיף")
     candidates = [
         c for c in data
         if (c.get("שלב") or "").strip() in ELIGIBLE_STAGES and "id" in c
@@ -997,7 +994,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
             if st.form_submit_button("סיום מיון"):
                 current_stage = (picked.get("שלב") or "").strip()
                 # אם מגיעים מאינקובציה בלוקים — נעביר ל"מיון", אחרת נשאיר את השלב
-                new_stage = "מיון" if current_stage == "אינקובציה בלוקים" else current_stage
+                new_stage = "מיון" if current_stage in ("אינקובציה בלוקים", "אנדרלייט") else current_stage
 
                 new_total_damaged = current_damaged + int(delta_damaged)
 
@@ -1014,7 +1011,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
                 st.success(f"עודכן בהצלחה. פגומים: {current_damaged} + {int(delta_damaged)} = {new_total_damaged}")
                 st.rerun()
     else:
-        st.info("אין תרביות זמינות למיון (אינקובציה בלוקים /אנדרלייט / מיון / קטיף).")
+        st.info("אין תרביות זמינות למיון (אנדרלייט / אינקובציה בלוקים / מיון / קטיף).")
 
     # טבלת תרביות בשלב מיון (למינים שאינם קורדיספס)
     dfc = pd.DataFrame([c for c in data if (c.get("שלב") or "").strip() == "מיון"])
