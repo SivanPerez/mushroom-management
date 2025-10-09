@@ -15,23 +15,28 @@ _FONTS_READY = False
 
 def ensure_fonts():
     """
-    רושם את NotoSansHebrew ל-ReportLab פעם אחת לכל תהליך.
-    לקרוא לפונקציה הזו בתחילת כל יצירת PDF.
+    רושם את NotoSansHebrew (Regular + Bold) ל-ReportLab פעם אחת לכל תהליך.
     """
     global _FONTS_READY
     if _FONTS_READY:
         return
 
-    # דיוק מיקום הקובץ: תקייה מקומית בשם Noto_Sans_Hebrew לצד labels.py
     base_dir = os.path.dirname(__file__)
-    font_path = os.path.join(base_dir, "Noto_Sans_Hebrew", "NotoSansHebrew-Regular.ttf")
+    fonts_dir = os.path.join(base_dir, "Noto_Sans_Hebrew")
 
-    if not os.path.exists(font_path):
-        # אם תרצי – אפשר להחליף ל-st.warning במקום Exception
-        raise FileNotFoundError(f"Font not found at: {font_path}")
+    reg_path  = os.path.join(fonts_dir, "NotoSansHebrew-Regular.ttf")
+    bold_path = os.path.join(fonts_dir, "NotoSansHebrew-Bold.ttf")  # ← חדש
 
-    pdfmetrics.registerFont(TTFont("NotoSansHebrew", font_path))
+    if not os.path.exists(reg_path):
+        raise FileNotFoundError(f"Font not found at: {reg_path}")
+    if not os.path.exists(bold_path):
+        raise FileNotFoundError(f"Font not found at: {bold_path}")  # ← חדש
+
+    pdfmetrics.registerFont(TTFont("NotoSansHebrew", reg_path))
+    pdfmetrics.registerFont(TTFont("NotoSansHebrew-Bold", bold_path))  # ← חדש
+
     _FONTS_READY = True
+
 
 def create_labels_pdf(selected_cultures, filename):
     ensure_fonts()
@@ -146,12 +151,16 @@ def create_liquid_labels_pdf(selected_cultures, filename):
     page_w, page_h = (4 * 25.4 * mm, 4 * 25.4 * mm)
     c = canvas.Canvas(filename, pagesize=(page_w, page_h))
 
-    small_w, small_h, gap = 28*mm, 12*mm, 2*mm
-    cols = 2
-    left_margin = (page_w - (cols*small_w + (cols-1)*gap)) / 2.0
-    top_margin  = page_h - 8*mm
+    # ----- מדבקות קטנות: חישוב דינמי שימלא את רוחב הדף -----
+    cols = 2  # שני טורים
+    gap = 2 * mm  # רווח בין מדבקות
+    side_margin = 3 * mm  # שוליים צדדיים קטנים וקבועים
+    small_h = 12 * mm  # גובה מדבקה (אין שינוי)
+    small_w = (page_w - 2 * side_margin - (cols - 1) * gap) / cols  # ממלא כמעט את כל הרוחב
+    left_margin = side_margin
+    top_margin = page_h - 8 * mm
 
-    cell_cols, cell_rows, cell_gap = 3, 3, 2*mm
+    cell_cols, cell_rows, cell_gap = 3, 3, 0*mm
     inner_margin = 6*mm
     grid_w = page_w - inner_margin*2
     grid_h = page_h - inner_margin*2
@@ -176,7 +185,7 @@ def create_liquid_labels_pdf(selected_cultures, filename):
         return "…"
 
     def draw_small_label(cx, cy, line1, line2):
-        font = "NotoSansHebrew"
+        font = "NotoSansHebrew-Bold"
         max_w = small_w - 4*mm
         s = min(_fit(line1, font, max_w), _fit(line2, font, max_w))
         c.setFont(font, s)
@@ -187,10 +196,35 @@ def create_liquid_labels_pdf(selected_cultures, filename):
         return max(1, int((top_margin - 10*mm) // (small_h + gap)))
 
     def start_page(title):
-        c.setFont("NotoSansHebrew", 12)
+        c.setFont("NotoSansHebrew-Bold", 12)
         c.drawCentredString(page_w/2, page_h-6*mm, reverse_hebrew_text(title))
 
-    def draw_block(labels, add_title=None, row_index=0):
+    def draw_bottle_grid_lines():
+        """קווי גריד דקים על פני כל ה-3×3 (בלי רווחים בין מדבקות)."""
+        c.saveState()
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(0.1)
+        c.setDash(1, 2)
+
+        # קואורדינטות שוליים
+        x_left = inner_margin
+        x_right = inner_margin + grid_w
+        y_top = page_h - inner_margin
+        y_bot = page_h - inner_margin - grid_h
+
+        # אנכיים: אחרי עמודה 1 ואחרי עמודה 2
+        for i in (1, 2):
+            x = inner_margin + i * cell_w + (i - 1) * cell_gap
+            c.line(x, y_top, x, y_bot)
+
+        # אופקיים: אחרי שורה 1 ואחרי שורה 2
+        for j in (1, 2):
+            y = y_top - j * cell_h - (j - 1) * cell_gap
+            c.line(x_left, y, x_right, y)
+
+        c.restoreState()
+
+    def draw_block(labels, add_title=None, row_index=0, title_blank_row=False):
         """
         labels: [(line1,line2), ...]
         אם אין מקום ל(כותרת+שורות) – פותח עמוד חדש.
@@ -198,7 +232,8 @@ def create_liquid_labels_pdf(selected_cultures, filename):
         """
         need_rows = (len(labels)+cols-1)//cols
         avail = rows_can_fit() - row_index
-        need = need_rows + (1 if add_title else 0)
+        title_cost = 1 if (add_title and title_blank_row) else 0
+        need = need_rows + title_cost
         if avail < need:
             c.showPage()
             if add_title: start_page(add_title)
@@ -206,11 +241,12 @@ def create_liquid_labels_pdf(selected_cultures, filename):
         elif add_title:
             # מציבים את הכותרת ממש מעל שורת המדבקות הראשונה,
             # בלי "לבזבז" שורת גריד שלמה
-            c.setFont("NotoSansHebrew", 12)
-            y_title = top_margin - row_index * (small_h + gap) - 2 * mm
+            c.setFont("NotoSansHebrew-Bold", 12)
+            y_title = top_margin - row_index * (small_h + gap) - 12 * mm
             c.drawCentredString(page_w / 2, y_title, reverse_hebrew_text(add_title))
             # לא מעלים row_index — כדי שהמדבקות יתחילו באותה שורה
-
+            if title_blank_row:
+                row_index += 1
         # ציור המדבקות
         i = 0
         while i < len(labels):
@@ -236,18 +272,32 @@ def create_liquid_labels_pdf(selected_cultures, filename):
         renderPDF.draw(d, c, x-size_mm*mm/2, y-size_mm*mm/2)
 
     def draw_bottle_cell(ix, iy, id_text, name_he, date_text, url):
-        x0 = inner_margin + ix*(cell_w+cell_gap)
-        y0 = page_h - inner_margin - (iy+1)*cell_h - iy*cell_gap
-        c.setStrokeColor(colors.black); c.setLineWidth(0.5)
-        c.rect(x0, y0, cell_w, cell_h, stroke=1, fill=0)
-        font = "NotoSansHebrew"; pad = 2*mm; max_w = cell_w - pad*2
-        top_text = f"ID: {id_text}   {reverse_hebrew_text(name_he)}"
-        s = _fit(top_text, font, max_w, start=8, min_=6)
-        c.setFont(font, s)
-        c.drawCentredString(x0+cell_w/2, y0+cell_h-10, _ellips(top_text, max_w, font, s))
-        draw_qr_center(x0+cell_w/2, y0+cell_h/2, 16, url)
+        x0 = inner_margin + ix * (cell_w + cell_gap)
+        y0 = page_h - inner_margin - (iy + 1) * cell_h - iy * cell_gap
+
+        # לא מציירים מסגרת (יש קווי גריד חיצוניים)
+        font = "NotoSansHebrew-Bold"
+        pad = 2 * mm
+        max_w = cell_w - pad * 2
+
+        # --- שורה 1: ID ---
+        line_id = f"ID: {id_text}"
+        s_id = _fit(line_id, font, max_w, start=8, min_=6)
+        c.setFont(font, s_id)
+        c.drawCentredString(x0 + cell_w / 2, y0 + cell_h - 8, line_id)
+
+        # --- שורה 2: שם התרבית ---
+        line_name = reverse_hebrew_text(name_he)
+        s_name = _fit(line_name, font, max_w, start=8, min_=6)
+        c.setFont(font, s_name)
+        c.drawCentredString(x0 + cell_w / 2, y0 + cell_h - 18, line_name)
+
+        # --- QR במרכז ---
+        draw_qr_center(x0 + cell_w / 2, y0-3 + cell_h / 2, 20, url)
+
+        # --- תאריך בתחתית ---
         c.setFont(font, 8)
-        c.drawCentredString(x0+cell_w/2, y0+6, str(date_text))
+        c.drawCentredString(x0 + cell_w / 2, y0 + 6, str(date_text))
 
     # --- יצירה ---
     for culture in selected_cultures:
@@ -277,23 +327,22 @@ def create_liquid_labels_pdf(selected_cultures, filename):
             l1 = f"ID: {mother_id}  {reverse_hebrew_text(mother_name)}"
             l2 = f"{bottle_date}  {mother_transfer or '-'}"
             cryo_labels.append((l1, l2))
-        row_idx = draw_block(cryo_labels, add_title="ריוטיפים", row_index=row_idx)
+        row_idx = draw_block(cryo_labels, add_title="ריוטיפים", row_index=row_idx, title_blank_row=True)
 
         # --- מעבר עמוד לפני הבקבוקים ---
         c.showPage()
 
         # --- בקבוקים 3×3 עם QR (כמו שהיה) ---
         pages_needed = math.ceil(total_bottles / 9)
-        url_tmpl = f"https://mycospring.com/app/inoculation/{species_en.lower()}?id={mother_id}"
+        url_tmpl = "https://mushroom-manage.streamlit.app/"
         counter = 0
         for _ in range(pages_needed):
+            draw_bottle_grid_lines()
             for iy in range(cell_rows):
                 for ix in range(cell_cols):
                     if counter >= total_bottles:
                         x0 = inner_margin + ix*(cell_w+cell_gap)
                         y0 = page_h - inner_margin - (iy+1)*cell_h - iy*cell_gap
-                        c.setStrokeColor(colors.black); c.setLineWidth(0.5)
-                        c.rect(x0, y0, cell_w, cell_h, stroke=1, fill=0)
                         continue
                     draw_bottle_cell(ix, iy, mother_id, mother_name, bottle_date, url_tmpl)
                     counter += 1
