@@ -1065,7 +1065,6 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
     else:
         st.info("אין כרגע תרביות באנדרלייט.")
 
-
 def render_first_harvest_generic(ctx: UIContext, data=None, **kwargs):
     st.header("קטיף ראשוני")
     st.subheader("ביצוע קטיף ראשוני")

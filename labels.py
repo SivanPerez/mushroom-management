@@ -140,239 +140,162 @@ def extract_int(s, default=0):
     return int(m.group(1)) if m else default
 
 def create_liquid_labels_pdf(selected_cultures, filename):
-
     ensure_fonts()
 
-    def _fit_text_size(text, font_name, max_width_pt, start_size=10, min_size=6):
-        size = start_size
-        while size >= min_size:
-            if stringWidth(text, font_name, size) <= max_width_pt:
-                return size
-            size -= 1
-        return min_size  # ניפול למינימום
-
-    def _truncate_middle(text, max_width_pt, font_name, font_size):
-        # אם גם במינימום לא נכנס – נקצר במרכז עם …
-        if stringWidth(text, font_name, font_size) <= max_width_pt:
-            return text
-        left, right = 0, 0
-        ell = "…"
-        while left + right < len(text):
-            candidate = text[: len(text) // 2 - left] + ell + text[len(text) // 2 + right:]
-            if stringWidth(candidate, font_name, font_size) <= max_width_pt or len(candidate) <= 3:
-                return candidate
-            # נגדל את החיתוך משני הצדדים
-            if (left + right) % 2 == 0:
-                left += 1
-            else:
-                right += 1
-        return ell
-
-    # ---------- הגדרות עמוד (מדבקה גדולה 4x4 אינץ') ----------
+    # --- קבועים / מידות ---
     page_w, page_h = (4 * 25.4 * mm, 4 * 25.4 * mm)
     c = canvas.Canvas(filename, pagesize=(page_w, page_h))
 
-    # --- כותרת לכל דף מדבקות קטנות ---
-    def start_small_labels_page(title_he):
-        c.setFont("NotoSansHebrew", 12)
-        c.drawCentredString(page_w / 2, page_h - 6 * mm, reverse_hebrew_text(title_he))
+    small_w, small_h, gap = 28*mm, 12*mm, 2*mm
+    cols = 2
+    left_margin = (page_w - (cols*small_w + (cols-1)*gap)) / 2.0
+    top_margin  = page_h - 8*mm
 
-    def new_small_labels_page(title_he):
-        c.showPage()
-        start_small_labels_page(title_he)
+    cell_cols, cell_rows, cell_gap = 3, 3, 2*mm
+    inner_margin = 6*mm
+    grid_w = page_w - inner_margin*2
+    grid_h = page_h - inner_margin*2
+    cell_w = (grid_w - cell_gap*(cell_cols-1)) / cell_cols
+    cell_h = (grid_h - cell_gap*(cell_rows-1)) / cell_rows
 
-    # ---------- עזרי טקסט/מספר ----------
-    def as_int(x, default=0):
-        try:
-            s = str(x or "").strip().replace(",", "")
-            return int(float(s))
-        except Exception:
-            return default
+    # --- עזרי טקסט קטנים ---
+    def _fit(text, font, max_w, start=10, min_=6):
+        s = start
+        while s >= min_:
+            if stringWidth(text, font, s) <= max_w: return s
+            s -= 1
+        return min_
 
-    def increment_transfer_code(code):
-        s = (code or "").strip()
-        m = re.match(r'^([A-Za-z]?)(\d+)$', s)
-        if not m:
-            return "P2"
-        prefix, num = m.group(1), int(m.group(2))
-        if not prefix:
-            prefix = "P"
-        return f"{prefix}{num+1}"
+    def _ellips(text, max_w, font, size):
+        if stringWidth(text, font, size) <= max_w: return text
+        mid = len(text)//2
+        for k in range(len(text)):
+            cand = text[:max(0,mid-k)] + "…" + text[min(len(text),mid+k):]
+            if stringWidth(cand, font, size) <= max_w or len(cand) <= 3:
+                return cand
+        return "…"
 
-    def build_inoculation_url(species_en: str, culture_id: str):
-        # <<< החליפי ל-URL האמיתי של האפליקציה שלך אם צריך >>>
-        base = "https://mycospring.com/app/inoculation"
-        return f"{base}/{species_en.lower()}?id={culture_id}"
-
-    # ---------- ציור מדבקות קטנות (2 שורות ממורכז) ----------
-    small_label_w = 28 * mm
-    small_label_h = 12 * mm
-    small_gap = 2 * mm
-    cols = 3  # 3 עמודות למדבקות קטנות
-    left_margin = (page_w - (cols * small_label_w + (cols - 1) * small_gap)) / 2.0
-    top_margin = page_h - 8 * mm
-
-    def draw_small_2line_label(cx, cy, line1, line2, base_size=10, pad_mm=2):
+    def draw_small_label(cx, cy, line1, line2):
         font = "NotoSansHebrew"
-        max_w = (small_label_w - pad_mm * mm * 2)  # רוחב פנימי זמין
+        max_w = small_w - 4*mm
+        s = min(_fit(line1, font, max_w), _fit(line2, font, max_w))
+        c.setFont(font, s)
+        c.drawCentredString(cx, cy+3,  _ellips(line1, max_w, font, s))
+        c.drawCentredString(cx, cy-9, _ellips(line2, max_w, font, s))
 
-        # קבעי גודל פונט שמתאים לשתי השורות
-        s1 = _fit_text_size(line1, font, max_w, start_size=base_size, min_size=6)
-        s2 = _fit_text_size(line2, font, max_w, start_size=base_size, min_size=6)
-        size = min(s1, s2)
+    def rows_can_fit():
+        return max(1, int((top_margin - 10*mm) // (small_h + gap)))
 
-        # ואם גם במינימום לא נכנס – נקצר עם …
-        l1 = _truncate_middle(line1, max_w, font, size)
-        l2 = _truncate_middle(line2, max_w, font, size)
+    def start_page(title):
+        c.setFont("NotoSansHebrew", 12)
+        c.drawCentredString(page_w/2, page_h-6*mm, reverse_hebrew_text(title))
 
-        c.setFont(font, size)
-        c.drawCentredString(cx, cy + 3, l1)
-        c.drawCentredString(cx, cy - 9, l2)
+    def draw_block(labels, add_title=None, row_index=0):
+        """
+        labels: [(line1,line2), ...]
+        אם אין מקום ל(כותרת+שורות) – פותח עמוד חדש.
+        מחזיר row_index מעודכן.
+        """
+        need_rows = (len(labels)+cols-1)//cols
+        avail = rows_can_fit() - row_index
+        need = need_rows + (1 if add_title else 0)
+        if avail < need:
+            c.showPage()
+            if add_title: start_page(add_title)
+            row_index = 0
+        elif add_title:
+            # מציבים את הכותרת ממש מעל שורת המדבקות הראשונה,
+            # בלי "לבזבז" שורת גריד שלמה
+            c.setFont("NotoSansHebrew", 12)
+            y_title = top_margin - row_index * (small_h + gap) - 2 * mm
+            c.drawCentredString(page_w / 2, y_title, reverse_hebrew_text(add_title))
+            # לא מעלים row_index — כדי שהמדבקות יתחילו באותה שורה
 
-    def grid_positions_for_small(n_items, title_he=None):
-        # ציור כותרת לדף הראשון (רק אם ביקשו)
-        if title_he:
-            start_small_labels_page(title_he)
+        # ציור המדבקות
+        i = 0
+        while i < len(labels):
+            if row_index >= rows_can_fit():
+                c.showPage()
+                if add_title: start_page(add_title)  # כותרת בעמוד חדש
+                row_index = 0
+            for col in range(cols):
+                if i >= len(labels): break
+                x = left_margin + col*(small_w+gap) + small_w/2.0
+                y = top_margin - row_index*(small_h+gap) - small_h/2.0
+                l1, l2 = labels[i]
+                draw_small_label(x, y, l1, l2)
+                i += 1
+            row_index += 1
+        return row_index
 
-        per_row = cols
-        rows_can_fit = int((top_margin - 10 * mm) // (small_label_h + small_gap))
-        per_page = per_row * rows_can_fit if rows_can_fit > 0 else 1
-
-        count = 0
-        while count < n_items:
-            items_this_page = min(per_page, n_items - count)
-            idx_in_page = 0
-            while idx_in_page < items_this_page:
-                row = idx_in_page // per_row
-                col = idx_in_page % per_row
-                x = left_margin + col * (small_label_w + small_gap) + small_label_w / 2.0
-                y = top_margin - row * (small_label_h + small_gap) - small_label_h / 2.0
-                yield (x, y)
-                idx_in_page += 1
-            count += items_this_page
-            if count < n_items:
-                if title_he:
-                    new_small_labels_page(title_he)
-                else:
-                    c.showPage()
-
-    # ---------- ציור גריד 3x3 לבקבוקים ----------
-    cell_cols = 3
-    cell_rows = 3
-    cell_gap = 2 * mm
-    # מסגרת פנימית עם שוליים קטנים
-    inner_margin = 6 * mm
-    grid_w = page_w - inner_margin * 2
-    grid_h = page_h - inner_margin * 2
-    cell_w = (grid_w - cell_gap * (cell_cols - 1)) / cell_cols
-    cell_h = (grid_h - cell_gap * (cell_rows - 1)) / cell_rows
-
-    def draw_qr_at_center(x, y, size_mm, url):
-        # x,y = מרכז הריבוע; נגדיל/נמקם QR
-        qr_widget = qr.QrCodeWidget(url)
-        b = qr_widget.getBounds()
-        w = b[2] - b[0]
-        h = b[3] - b[1]
-        size_pt = size_mm * mm
-        scale = min(size_pt / w, size_pt / h)
-        d = Drawing(size_pt, size_pt, transform=[scale,0,0,scale,0,0])
-        d.add(qr_widget)
-        renderPDF.draw(d, c, x - size_pt/2.0, y - size_pt/2.0)
+    def draw_qr_center(x, y, size_mm, url):
+        w = qr.QrCodeWidget(url)
+        b = w.getBounds(); W, H = (b[2]-b[0]), (b[3]-b[1])
+        S = min(size_mm*mm/W, size_mm*mm/H)
+        d = Drawing(size_mm*mm, size_mm*mm, transform=[S,0,0,S,0,0]); d.add(w)
+        renderPDF.draw(d, c, x-size_mm*mm/2, y-size_mm*mm/2)
 
     def draw_bottle_cell(ix, iy, id_text, name_he, date_text, url):
-        # ix, iy = אינדקסים בגריד (0..2)
-        x0 = inner_margin + ix * (cell_w + cell_gap)
-        y0 = page_h - inner_margin - (iy + 1) * cell_h - iy * cell_gap
-
-        # מסגרת דקה לעזרה בחיתוך (אפשר לבטל)
-        c.setStrokeColor(colors.black)
-        c.setLineWidth(0.5)
+        x0 = inner_margin + ix*(cell_w+cell_gap)
+        y0 = page_h - inner_margin - (iy+1)*cell_h - iy*cell_gap
+        c.setStrokeColor(colors.black); c.setLineWidth(0.5)
         c.rect(x0, y0, cell_w, cell_h, stroke=1, fill=0)
-
-        # טקסט עליון: ID + שם תרבית (בלי כותרת)
-        c.setFont("NotoSansHebrew", 8)
-        # טקסט עליון: ID + שם תרבית (בלי כותרת שדה נוספת)
-        top_y = y0 + cell_h - 10
+        font = "NotoSansHebrew"; pad = 2*mm; max_w = cell_w - pad*2
         top_text = f"ID: {id_text}   {reverse_hebrew_text(name_he)}"
+        s = _fit(top_text, font, max_w, start=8, min_=6)
+        c.setFont(font, s)
+        c.drawCentredString(x0+cell_w/2, y0+cell_h-10, _ellips(top_text, max_w, font, s))
+        draw_qr_center(x0+cell_w/2, y0+cell_h/2, 16, url)
+        c.setFont(font, 8)
+        c.drawCentredString(x0+cell_w/2, y0+6, str(date_text))
 
-        font = "NotoSansHebrew"
-        pad = 2 * mm
-        max_w = cell_w - pad * 2
-        size = _fit_text_size(top_text, font, max_w, start_size=8, min_size=6)
-        top_text = _truncate_middle(top_text, max_w, font, size)
-
-        c.setFont(font, size)
-        c.drawCentredString(x0 + cell_w / 2.0, top_y, top_text)
-
-        # QR במרכז
-        qr_center_x = x0 + cell_w/2.0
-        qr_center_y = y0 + cell_h/2.0
-        draw_qr_at_center(qr_center_x, qr_center_y, size_mm=16, url=url)
-
-        # טקסט תחתון: תאריך (בלי כותרת)
-        c.setFont("NotoSansHebrew", 8)
-        bottom_y = y0 + 6
-        c.drawCentredString(x0 + cell_w/2.0, bottom_y, str(date_text))
-
-    # ============ יצירה ============
+    # --- יצירה ---
     for culture in selected_cultures:
-        species_en = "cordyceps"  # פה זה ספציפית קורדיספס
-        mother_id = str(culture.get("id", "-"))
-        mother_name = culture.get("תרבית", "-")
-        bottle_date = culture.get("תאריך בקבוקים", "-")
-        mother_transfer = str(culture.get("מספר העברה", "") or "").strip()
+        species_en = "cordyceps"
+        mother_id   = str(culture.get("id","-"))
+        mother_name = culture.get("תרבית","-")
+        bottle_date = culture.get("תאריך בקבוקים","-")
+        mother_transfer = str(culture.get("מספר העברה","") or "").strip()
         daughters_transfer = increment_transfer_code(mother_transfer)
+        daughters_count = int((str(culture.get("מספר העברות לצלחת פטרי",1)) or "1").split()[0])
+        daughters_count = max(1, daughters_count)
+        total_bottles = max(1, int((str(culture.get("מספר בקבוקים",1)) or "1").split()[0]))
 
-        daughters_count = as_int(culture.get("מספר העברות לצלחת פטרי", 1), default=1)
-        if daughters_count < 1:
-            daughters_count = 1
+        # --- צלחות בנות ---
+        start_page("צלחות בנות")
+        d_labels = []
+        for i in range(1, daughters_count+1):
+            name = f"{mother_name}-{i}"
+            l1 = f"ID: {mother_id}  {reverse_hebrew_text(name)}"
+            l2 = f"{bottle_date}  {daughters_transfer}"
+            d_labels.append((l1, l2))
+        row_idx = draw_block(d_labels, add_title=None, row_index=0)
 
-        total_bottles = as_int(culture.get("מספר בקבוקים", 1), default=1)
-        if total_bottles < 1:
-            total_bottles = 1
+        # --- ריוטיפים (2) – באותו עמוד אם יש מקום, אחרת חדש ---
+        cryo_labels = []
+        for _ in range(2):
+            l1 = f"ID: {mother_id}  {reverse_hebrew_text(mother_name)}"
+            l2 = f"{bottle_date}  {mother_transfer or '-'}"
+            cryo_labels.append((l1, l2))
+        row_idx = draw_block(cryo_labels, add_title="ריוטיפים", row_index=row_idx)
 
-        # בנות
-        positions = list(grid_positions_for_small(daughters_count, title_he="צלחות בנות"))
-        for i, (cx, cy) in enumerate(positions, start=1):
-            daughter_name = f"{mother_name}-{i}"
-            line1 = f"ID: {mother_id}  {reverse_hebrew_text(daughter_name)}"
-            line2 = f"{bottle_date}  {daughters_transfer}"
-            draw_small_2line_label(cx, cy, line1=line1, line2=line2)
-        if daughters_count > 0:
-            c.showPage()
-
-        # ריוטיפים (תמיד 2)
-        positions = list(grid_positions_for_small(2, title_he="ריוטיפים"))
-        for (cx, cy) in positions:
-            line1 = f"ID: {mother_id}  {reverse_hebrew_text(mother_name)}"
-            line2 = f"{bottle_date}  {mother_transfer or '-'}"
-            draw_small_2line_label(cx, cy, line1=line1, line2=line2)
+        # --- מעבר עמוד לפני הבקבוקים ---
         c.showPage()
 
-        # ---------- (C) בקבוקים – גריד 3x3 בכל עמוד ----------
+        # --- בקבוקים 3×3 עם QR (כמו שהיה) ---
         pages_needed = math.ceil(total_bottles / 9)
-        url_tmpl = build_inoculation_url(species_en, mother_id)
-
+        url_tmpl = f"https://mycospring.com/app/inoculation/{species_en.lower()}?id={mother_id}"
         counter = 0
         for _ in range(pages_needed):
-            # ציור 9 תאים או עד שנגמרים הבקבוקים
             for iy in range(cell_rows):
                 for ix in range(cell_cols):
                     if counter >= total_bottles:
-                        # למלא מסגרת ריקה לעקביות חיתוך
-                        x0 = inner_margin + ix * (cell_w + cell_gap)
-                        y0 = page_h - inner_margin - (iy + 1) * cell_h - iy * cell_gap
-                        c.setStrokeColor(colors.black)
-                        c.setLineWidth(0.5)
+                        x0 = inner_margin + ix*(cell_w+cell_gap)
+                        y0 = page_h - inner_margin - (iy+1)*cell_h - iy*cell_gap
+                        c.setStrokeColor(colors.black); c.setLineWidth(0.5)
                         c.rect(x0, y0, cell_w, cell_h, stroke=1, fill=0)
                         continue
-                    draw_bottle_cell(
-                        ix, iy,
-                        id_text=mother_id,
-                        name_he=mother_name,
-                        date_text=bottle_date,
-                        url=url_tmpl,
-                    )
+                    draw_bottle_cell(ix, iy, mother_id, mother_name, bottle_date, url_tmpl)
                     counter += 1
             c.showPage()
 
