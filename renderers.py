@@ -896,7 +896,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
         ready_to_move = [c for c in data if c.get("שלב") == prev_stage]
 
         if ready_to_move:
-            st.subheader("העברה לשלב מיון")
+            st.subheader("בצע מיון")
 
             # מציגים תמיד את תאריך האנדרלייט בסוגריים
             options = {
@@ -913,28 +913,49 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
                 if st.form_submit_button("סיום מיון"):
                     c_id = options[selected]
 
-                    # כתיבה ל-DB/Sheets באמצעות ops.update (העטיפה שלך כבר דואגת לחתימה)
+                    picked = next((x for x in data if str(x.get("id")) == str(c_id)), {})
+
+                    # סכימת 'פגומים' מצטברת, כולל גשר לעמודות היסטוריות אם קיימות
+                    legacy = int(picked.get("מספר בלוקים פגומים", 0) or 0) + int(
+                        picked.get("מספר קופסאות פגומות", 0) or 0)
+                    current_damaged = int(picked.get("פגומים", 0) or 0) or legacy
+                    new_total_damaged = current_damaged + int(damaged or 0)
+
+                    # לא משנים 'שלב' כלל — רק סטטוס ותיעוד
                     update(c_id, {
-                        "שלב": "מיון",
+                        "עבר מיון": True,
                         "תאריך מיון": tdate.strftime("%d/%m/%Y"),
-                        "מספר קופסאות פגומות": int(damaged),
-                        "מספר קופסאות לקטיף ראשוני": int(partial),
+                        "פגומים": new_total_damaged,
+                        "קטיף ראשוני": int(partial),
+                        "תאריך עדכון מיון": date.today().strftime("%d/%m/%Y"),
                     })
 
                     st.success("בוצע מיון!")
                     st.rerun()
+
         else:
             st.info("אין תרביות זמינות להעברה לשלב מיון.")
 
-        # טבלת תרביות בשלב מיון
-        dfc = pd.DataFrame([c for c in data if c.get("שלב") == "מיון"])
+        # תצוגה: אנדרלייט + אינדיקציית מיון (קורדיספס)
+        dfc = pd.DataFrame([c for c in data if (c.get("שלב") or "").strip() == "אנדרלייט"])
         if not dfc.empty:
-            st.subheader("תרביות בשלב מיון")
-            non_empty_cols = dfc.loc[
-                :, dfc.apply(lambda col: col.astype(str).str.strip().replace('nan', '').astype(bool).any())]
-            st.dataframe(non_empty_cols)
+            for col in ("עבר מיון", "תאריך מיון", "פגומים", "תאריך אנדרלייט", "תרבית", "id"):
+                if col not in dfc.columns:
+                    dfc[col] = pd.NA
+
+            def _tag(v):
+                s = str(v).strip().lower()
+                return "✓" if s in ("true", "1", "yes") else ""
+
+            df_show = dfc.copy()
+            df_show["עבר מיון"] = df_show["עבר מיון"].apply(_tag)
+            st.subheader("אינדיקציית מיון")
+            st.dataframe(df_show[["id", "תרבית", "תאריך אנדרלייט", "עבר מיון", "תאריך מיון", "פגומים","קטיף ראשוני"]],
+                         use_container_width=True)
+
         else:
-            st.info("אין תרביות בשלב מיון.")
+            st.info("אין כרגע תרביות באנדרלייט.")
+
         return  # קורדיספס הסתיים כאן
 
     # ========= כאן מתחיל המימוש למינים שאינם קורדיספס =========
@@ -949,7 +970,7 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
     update = ops["update"]
 
     # מועמדים למיון: אינקובציה בלוקים / מיון / קטיף
-    ELIGIBLE_STAGES = ("אנדרלייט", "אינקובציה בלוקים", "מיון", "קטיף")
+    ELIGIBLE_STAGES = ("אנדרלייט", "אינקובציה בלוקים", "קטיף")
     candidates = [
         c for c in data
         if (c.get("שלב") or "").strip() in ELIGIBLE_STAGES and "id" in c
@@ -992,16 +1013,23 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
             note = st.text_input("הערת מיון (אופציונלי)").strip()
 
             if st.form_submit_button("סיום מיון"):
-                current_stage = (picked.get("שלב") or "").strip()
-                # אם מגיעים מאינקובציה בלוקים — נעביר ל"מיון", אחרת נשאיר את השלב
-                new_stage = "מיון" if current_stage in ("אינקובציה בלוקים", "אנדרלייט") else current_stage
+                picked_id = options[selected]
+                picked = next((x for x in data if x["id"] == picked_id), {})
 
+                # ערך פגומים נוכחי (כולל גשר לעמודות היסטוריות אם ישנן)
+                legacy = 0
+                legacy += int(picked.get("מספר בלוקים פגומים", 0) or 0)
+                legacy += int(picked.get("מספר קופסאות פגומות", 0) or 0)
+                current_damaged = int(picked.get("פגומים", 0) or 0) or legacy
+
+                # דלתא שהוזנה בטופס
                 new_total_damaged = current_damaged + int(delta_damaged)
 
+                # ← לא משנים 'שלב' בכלל! רק סטטוס ותיעוד
                 payload = {
-                    "שלב": new_stage,
+                    "עבר מיון": True,
                     "תאריך מיון": tdate.strftime("%d/%m/%Y"),
-                    "פגומים": new_total_damaged,  # ← סכום, לא החלפה
+                    "פגומים": new_total_damaged,
                 }
                 if note:
                     payload["הערת מיון"] = note
@@ -1010,20 +1038,33 @@ def render_sorting_generic(ctx: UIContext, data=None, **kwargs):
                 update(picked_id, payload)
                 st.success(f"עודכן בהצלחה. פגומים: {current_damaged} + {int(delta_damaged)} = {new_total_damaged}")
                 st.rerun()
+
     else:
         st.info("אין תרביות זמינות למיון (אנדרלייט / אינקובציה בלוקים / מיון / קטיף).")
 
     # טבלת תרביות בשלב מיון (למינים שאינם קורדיספס)
-    dfc = pd.DataFrame([c for c in data if (c.get("שלב") or "").strip() == "מיון"])
+    # תצוגה: אנדרלייט + אינדיקציית מיון (שאר המינים)
+    dfc = pd.DataFrame([c for c in data if (c.get("שלב") or "").strip() in ELIGIBLE_STAGES])
     if not dfc.empty:
-        # ודאי שהעמודה 'פגומים' קיימת גם לשורות ישנות
         if "פגומים" not in dfc.columns:
             dfc["פגומים"] = pd.NA
-        non_empty_cols = dfc.loc[:, dfc.apply(lambda col: col.astype(str).str.strip().replace('nan', '').astype(bool).any())]
-        st.subheader("תרביות בשלב מיון")
-        st.dataframe(non_empty_cols, use_container_width=True)
+        for col in ("עבר מיון", "תאריך מיון", "תאריך אנדרלייט", "תרבית", "id"):
+            if col not in dfc.columns:
+                dfc[col] = pd.NA
+
+        def _tag(v):
+            s = str(v).strip().lower()
+            return "✓" if s in ("true", "1", "yes") else ""
+
+        df_show = dfc.copy()
+        df_show["עבר מיון"] = df_show["עבר מיון"].apply(_tag)
+        st.subheader("אינדיקציית מיון")
+        st.dataframe(df_show[["id", "תרבית", "תאריך אנדרלייט", "עבר מיון", "תאריך מיון", "פגומים"]],
+                     use_container_width=True)
+
     else:
-        st.info("אין כרגע תרביות בשלב מיון.")
+        st.info("אין כרגע תרביות באנדרלייט.")
+
 
 def render_first_harvest_generic(ctx: UIContext, data=None, **kwargs):
     st.header("קטיף ראשוני")
@@ -1034,8 +1075,8 @@ def render_first_harvest_generic(ctx: UIContext, data=None, **kwargs):
         st.stop()
     update = ops["update"]
 
-    # רק תרביות בשלב "מיון"
-    sorting = [c for c in data if str(c.get("שלב", "")).strip() == "מיון"]
+    # רק תרביות בשלב "אנדרלייט"
+    sorting = [c for c in data if str(c.get("שלב", "")).strip() == "אנדרלייט"]
 
     def _fmt_ymd(v):
         if isinstance(v, date): return v.strftime("%Y/%m/%d")
@@ -1074,7 +1115,7 @@ def render_first_harvest_generic(ctx: UIContext, data=None, **kwargs):
             st.success(f"תרבית #{c_id} עודכנה ל'קטיף ראשוני'.")
             st.rerun()
     else:
-        st.info("אין תרביות זמינות לקטיף ראשוני (שלב: מיון).")
+        st.info("אין תרביות זמינות לקטיף ראשוני (שלב: אנדרלייט).")
 
     # טבלה – מצב נוכחי של קטיף ראשוני
     _show_stage_table(data, "קטיף ראשוני", "תרביות בשלב קטיף ראשוני")
@@ -1155,7 +1196,7 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
     st.header("קטיף")
 
     # שלבים מהם מותר לקטוף
-    ELIGIBLE_STAGES = ("אנדרלייט", "מיון", "קטיף")
+    ELIGIBLE_STAGES = ("אנדרלייט", "קטיף")
 
     # רשומות מותרות לקטיף: בשלב מתאים, לא סגורות, ויש להן id
     candidates = [
@@ -1233,7 +1274,7 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
 
             # קידום שלב: אם עדיין לא ב"קטיף" – נעבור ל"קטיף"
             current_stage = (picked.get("שלב") or "").strip()
-            new_stage = "קטיף" if current_stage in ("אינקובציה בלוקים", "מיון") else current_stage
+            new_stage = "קטיף" if current_stage in ("אינקובציה בלוקים") else current_stage
 
             payload = {
                 "שלב": new_stage,
@@ -1258,14 +1299,14 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
             st.success(f"נשמר קטיף: #{picked_id} | {flash_choice} | {w} גרם (סה\"כ: {new_total} גרם).")
             st.rerun()
     else:
-        st.info("אין תרביות זמינות לקטיף (אנדרלייט / מיון / קטיף).")
+        st.info("אין תרביות זמינות לקטיף (אנדרלייט / קטיף).")
 
     st.divider()
 
     # ===== כפתור נפרד: סגירת מחזור קטיף (בלתי הפיך) =====
     closable = [
         c for c in data
-        if (c.get("שלב") or "").strip() in ("קטיף", "מיון", "אנדרלייט")
+        if (c.get("שלב") or "").strip() in ("קטיף", "אנדרלייט")
            and not (str(c.get("קטיף סגור", "")).strip().upper() in ("TRUE", "1", "YES"))
            and "id" in c
     ]
@@ -1319,7 +1360,7 @@ def render_harvest_others_generic(ctx: UIContext, data=None, **kwargs):
     # פתוחות לקטיף (לא סגור)
     open_rows = [
         c for c in data
-        if (c.get("שלב") or "").strip() in ("אנדרלייט", "מיון", "קטיף")
+        if (c.get("שלב") or "").strip() in ("אנדרלייט", "קטיף")
         and not (str(c.get("קטיף סגור", "")).strip().upper() in ("TRUE", "1", "YES"))
     ]
     if open_rows:
