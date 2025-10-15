@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from ui_helpers import UIContext, _show_stage_table
 from config import species_labels_he
 
+
 # ===================== רנדררים =====================
 # ==== Adapters / Helpers ====
 def ctx_get(ctx, name, default=None):
@@ -698,6 +699,103 @@ def render_g2g_generic(ctx: UIContext, data=None, **kwargs):
                     f"#{row.get('id','-')} | {row.get('תרבית','?')} | מקור: {row.get('כמות גריין מקור','-')} | "
                     f"חדש: {row.get('כמות גריין חדש','-')} | תאריך: {row.get('תאריך G2G','-')}"
                 )
+def render_underlight_special_withdrawal(ctx, data):
+    # מציג רק אצוות באנדרלייט
+    underlight = [c for c in data if (c.get("שלב") or "").strip() == "אנדרלייט"]
+    if not underlight:
+        return
+
+    st.header("הוצאה מיוחדת מהמלאי")
+    st.caption("קופסאות לצילום/יח״צ/שימוש צוות אינן נספרות בממוצע לקופסה")
+
+    ops = get_ops(ctx)
+    if not ops:
+        st.warning("Ops לא זמין.")
+        st.stop()
+
+    update = ops["update"]
+
+    # תוויות פשוטות לבחירה
+    options = {
+        f"#{c.get('id')} · {c.get('תרבית','?')}": c.get("id")
+        for c in underlight if c.get("id") is not None
+    }
+
+    with st.form("special_withdrawal_form", clear_on_submit=False):
+
+        sel_label = st.selectbox("בחר תרבית", list(options.keys()))
+        when       = st.date_input("תאריך", value=dt.date.today())
+        reason     = st.selectbox("סיבת הוצאה", ["צילום", "יח״צ", "שימוש צוות", "מתנה", "אחר"])
+        details = st.text_area("פרטי הוצאה", height=60)
+        qty        = st.number_input("כמות קופסאות", min_value=1, step=1)
+        submitted  = st.form_submit_button("בצע הוצאה מיוחדת")
+
+    if not submitted:
+        return
+    if reason == "אחר" and not (details or "").strip():
+        st.error("כשנבחרה סיבת 'אחר' חובה למלא 'פרטי הוצאה'.")
+        return
+
+    labels = [sel_label]
+    label_to_id = {sel_label: options[sel_label]}
+
+    # חלוקה שווה של הכמות בין האצוות שנבחרו (פשוט)
+    remaining = int(qty)
+    per_batch = []
+    for i, lbl in enumerate(labels, start=1):
+        parts_left = len(labels) - (i - 1)
+        take = (remaining + parts_left - 1) // parts_left
+        per_batch.append((label_to_id[lbl], lbl, take))
+        remaining -= take
+
+    # מיפוי id -> רשומת אצווה (כדי שלא נסרוק את data כל פעם)
+    by_id = {c.get("id"): c for c in data if c.get("id") is not None}
+
+    ok = 0
+    for batch_id, label, take in per_batch:
+        if take <= 0:
+            continue
+
+        batch_row = by_id.get(batch_id, {})
+        culture   = batch_row.get("תרבית")
+
+        # תאריך בפורמט הגיליונות שכבר יש לך:
+        date_str = _today_ddmmyyyy(when)
+
+        # --- עדכון שורת האצווה עצמה בגיליון של המין ---
+        # מונה מצטבר לשימוש פנימי
+        current_val = batch_row.get("כמות לשימוש פנימי")
+        try:
+            base = int(current_val or 0)
+        except Exception:
+            base = 0
+        new_total = base + int(take)
+
+        reason_final = (f"אחר: {details.strip()}" if reason == "אחר" else reason)
+        existing_reasons = ((batch_row.get("סיבת הוצאה") or "").strip())
+        new_reason_value = reason_final if not existing_reasons else f"{existing_reasons} | {reason_final}"
+
+        note = ("" if reason == "אחר" else details.strip())
+        existing_note = (batch_row.get("הערת הוצאה") or "").strip()
+        new_note_value = (
+            existing_note if not note
+            else (note if not existing_note else f"{existing_note} | {note}")
+        )
+        fields = {
+            "כמות לשימוש פנימי": new_total,
+            "תאריך הוצאה אחרון": date_str,
+            "סיבת הוצאה": new_reason_value,
+            "הערת הוצאה": new_note_value,
+        }
+
+        try:
+            update(batch_id, fields)  # ← נשמר בשורה של ה-ID בגיליון של ה-species
+            ok += 1
+            st.success(f"בוצעה הוצאה של {int(take)} יחידות עבור תרבית #{batch_id}")
+        except Exception as e:
+            st.error(f"שגיאה בעדכון שורת #{batch_id}: {e}")
+            continue
+
 
 def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
 
@@ -766,6 +864,11 @@ def render_underlight_generic(ctx: UIContext, data=None, **kwargs):
             st.rerun()
     else:
         st.info("אין תרביות זמינות להעברה לאנדרלייט מהשלבים המתאימים.")
+
+    st.divider()
+
+        # === בלוק: הוצאה מיוחדת מהמלאי (לא משפיע על ממוצע) ===
+    render_underlight_special_withdrawal(ctx, data)
 
     _show_stage_table(data, "אנדרלייט", "תרביות בשלב אנדרלייט")
 

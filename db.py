@@ -181,15 +181,18 @@ def add_record(species: str, record: Dict[str, Any]):
 # ======== עדכון לפי id (Batch Update במקום update_cell בלולאה) ========
 def update_record_by_id(species: str, record_id: int, updates: Dict[str, Any]) -> bool:
     """
-    מאתר שורה לפי id ומעדכן שדות קיימים באמצעות batch_update כדי לצמצם בקשות.
-    מחזיר True אם נמצא עודכן, אחרת False.
+    מאתר שורה לפי id ומעדכן שדות. אם חסרות כותרות בעבור מפתחות ב-updates,
+    יוצר אותן אוטומטית בשורת הכותרות (row 1) ואז מבצע עדכון.
+    מחזיר True אם עודכן, אחרת False.
     """
     sh = _open_spreadsheet()
     ws = _get_or_create_ws(sh, species)
 
-    headers = _headers(ws)
-    rows = load_data(species)  # מהמטמון – משיכה אחת
-    # מציאת אינדקס שורה לוגי
+    # כותרות נוכחיות
+    headers = _headers(ws)  # רשימת שמות העמודות משורה 1
+
+    # נתונים מהמטמון למציאת אינדקס השורה
+    rows = load_data(species)
     target_idx = None
     for idx, row in enumerate(rows):
         try:
@@ -198,20 +201,30 @@ def update_record_by_id(species: str, record_id: int, updates: Dict[str, Any]) -
                 break
         except ValueError:
             continue
-
     if target_idx is None:
         return False
 
-    sheet_row = target_idx + 2  # +1 לכותרות +1 לאינדקס 0-based
+    sheet_row = target_idx + 2  # +1 כותרות, +1 לאינדקס 0-based
 
-    # מסננים רק שדות שקיימים בכותרות
-    items = [(k, v) for k, v in updates.items() if k in headers]
-    if not items:
-        return True  # אין מה לעדכן, אבל לא כישלון
+    # --- יצירת כותרות חסרות (אם יש) ---
+    missing_headers = [k for k in updates.keys() if k not in headers]
+    if missing_headers:
+        start_col = len(headers) + 1
+        # כתיבת שמות העמודות החדשות ברצף בשורה 1, החל מהעמודה הבאה הפנויה
+        start_a1 = gspread.utils.rowcol_to_a1(1, start_col)
+        end_a1   = gspread.utils.rowcol_to_a1(1, start_col + len(missing_headers) - 1)
+        _with_backoff(ws.batch_update, [{
+            "range": f"{start_a1}:{end_a1}",
+            "values": [missing_headers],  # שורה אחת עם כל הכותרות החדשות
+        }])
+        headers.extend(missing_headers)  # לעבודה בהמשך בלי למשוך כותרות מחדש
 
-    # יוצרים batch של טווחים לעדכון (אפשר לאחד רצפים, אבל גם בנפרד זה יעיל)
+    # --- בניית בקשות עדכון לכל שדה ב-updates (כעת כולן קיימות בכותרות) ---
     data_requests = []
-    for k, v in items:
+    for k, v in updates.items():
+        if k not in headers:
+            # הגנה כפולה – לא אמור לקרות אחרי ההוספה למעלה
+            continue
         col = headers.index(k) + 1
         rng = gspread.utils.rowcol_to_a1(sheet_row, col)
         data_requests.append({
@@ -219,8 +232,10 @@ def update_record_by_id(species: str, record_id: int, updates: Dict[str, Any]) -
             "values": [[v]],
         })
 
-    _with_backoff(ws.batch_update, data_requests)
-    st.cache_data.clear()  # לנקות מטמון נתונים כדי לראות מייד את העדכון
+    if data_requests:
+        _with_backoff(ws.batch_update, data_requests)
+
+    st.cache_data.clear()  # לרענן את המטמון
     return True
 
 def append_inventory_movement(species_en: str, stage: str,
